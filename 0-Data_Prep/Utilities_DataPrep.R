@@ -8,11 +8,11 @@
 Tidy.Data <- function(data) {
 
     my.data <- read_csv(data) |>
-                    select(all_of(c("subject", "congruence", "blockcode", "faceemotion", "stimulusitem3", "correctButton", "response", "latency", 
+                    select(all_of(c("kcni_participant_id", "congruence", "blockcode", "faceemotion", "stimulusitem3", "correctButton", "response", "latency", 
                                     "word_y", "wordposition"))) |>
                                         filter(blockcode == "testMC" | blockcode == "testE") |>
                                             drop_na() |>
-                                                mutate(SID = subject,
+                                                mutate(SID = kcni_participant_id,
                                                     ## 1 = Congruent, 2 = Incongruent
                                                     congruence = fct_recode(as.factor(congruence), "congruent" = "1", "incongruent" = "2"),
                                                     frequency = fct_recode(blockcode, "equal" = "testE", "more_cong" = "testMC"),
