@@ -4,8 +4,6 @@
 ##      This script holds the utility functions to run the descriptives stats for the emotional stroop task data
 
 
-
-
 Subject.Level.Descr <- function(my.df, ...) {
 
     summary <- my.df |> 
@@ -31,7 +29,7 @@ Cohort.Level.Descr <- function(subj.level) {
 
 
 
-All.Summaries <- function(data) {
+EST.Descriptives <- function(data) {
 
     my.data <- read_rds(data)
 
@@ -41,7 +39,7 @@ All.Summaries <- function(data) {
 
 
     ## ---- Mean accuracy and RT depending on congruency ----              
-    congruency_subj <- Subject.Level.Descr(my.data, SID, congruence)
+    congruency <- Subject.Level.Descr(my.data, SID, congruence)
 
     ## Separating congruent VS incongruent subj summary levels
     congruent_subj <- subset(congruency, congruence == "congruent")
@@ -108,4 +106,63 @@ All.Summaries <- function(data) {
     summary_cohort <- bind_cols(my_summaries, summary_cohort)
 
     write.csv(summary_cohort, "./1-Descriptives/Outputs/Summary_Cohort_Mean_Acc_RT.csv", row.names = F)
+}
+
+
+## This function creates a numeric summary for all our variables (keep numeric only first)
+Numeric.Summary <- function(vars) {
+
+  numeric_summary <- vars |>
+                        summarise(across(everything(),
+                                    list(
+                                            n = ~ sum(!is.na(.x), na.rm = T),
+                                            mean = ~ round(mean(.x, na.rm = T), 3),
+                                            sd = ~ round(sd(.x, na.rm = T), 3),
+                                            median = ~ round(median(.x, na.rm = T), 3),
+                                            iqr = ~ round(IQR(.x, na.rm = T), 3),
+                                            min = ~ round(min(.x, na.rm = T), 3),
+                                            max = ~ round(max(.x, na.rm = T), 3),
+                                            skewness = ~ round(as.numeric(skewness(.x, na.rm = T)), 3), 
+                                            kurtosis = ~ round(as.numeric(kurtosis(.x, na.rm = T)), 3)
+                                        ), .names = "{.col}.{.fn}"
+                                    )) |>
+                                        pivot_longer(cols = everything(), names_to = c("variable", ".value"), names_sep = "\\.")
+
+  return(numeric_summary)
+}
+
+
+## This function creates a frequency summary for all our variables (keep factor only first)
+Frequency.Summary <- function(vars) {
+
+  frequency_summary <- vars |>
+                        pivot_longer(cols = -SID, names_to = "variable", values_to = "level") |>
+                            group_by(variable) |>
+                                mutate(total_n = n(),
+                                        valid_n = sum(!is.na(level))) |>
+                                    filter(!is.na(level)) |>
+                                        count(variable, level, total_n, valid_n, name = "n") |>
+                                            group_by(variable) |>
+                                                mutate(pct_valid = round((n / valid_n * 100), 3),
+                                                        pct_total = round((n / total_n * 100), 3),
+                                                        pct_valid_cum = round(cumsum(pct_valid), 3),
+                                                        pct_total_cum = round(cumsum(pct_total), 3)) |>
+                                                    ungroup()
+  
+  return(frequency_summary)
+}
+
+
+## This function computes numeric/frequency summaries for the descriptive stats
+Demographics.Descriptives <- function(data.demog) {
+
+    demog <- read_rds(data.demog)
+
+    numeric_vars <- select(demog, all_of(c("age")))
+    numeric_summary <- Numeric.Summary(numeric_vars)
+    write.csv(numeric_summary, "./1-Descriptives/Outputs/Numeric_Descriptives.csv", row.names = F)
+
+    frequency_vars <- select(demog, -all_of(c("age")))
+    frequency_summary <- Frequency.Summary(frequency_vars)
+    write.csv(frequency_summary, "./1-Descriptives/Outputs/Frequency_Descriptives.csv", row.names = F)
 }
