@@ -5,7 +5,7 @@
 
 
 ## This function cleans the EST data from the TAY dataset to keep only the variables we are interested in
-Tidy.Data <- function(data) {
+Tidy.EST <- function(data) {
 
     my.data <- read_csv(data) |>
                     select(all_of(c("kcni_participant_id", "congruence", "blockcode", "faceemotion", "stimulusitem3", "correctButton", "response", "latency", 
@@ -34,4 +34,27 @@ Tidy.Data <- function(data) {
                             "word_y", "word_position")]
 
     write_rds(my.data, "./0-Data_Prep/Outputs/Tidy_EST.rds")
+}
+
+
+Tidy.Demographics <- function(data.EST, data.demog) {
+
+    EST <- read_rds(data.EST)
+
+    ids <- as.data.frame(unique(EST$SID))
+    colnames(ids) <- "SID"
+    
+    demog <- read_csv(data.demog, na = c("ASKU", "NA", "UNK", "PNA", "NI", "MI", "NASK", "Prefer not to answer", "Do not know")) |>
+                    mutate(
+                        SID = subject_id,
+                        age = as.numeric(age_enrolment),
+                        sex = as.factor(assigned_sex_at_birth),
+                        gender_diversity = as.factor(gender_diversity),
+                        ethnicity = as.factor(ethnicity),
+                        family_income = as.factor(family_income),
+                        .keep = "none"
+                    ) |> 
+                        inner_join(ids, by = "SID")
+
+    write_rds(demog, "./0-Data_Prep/Outputs/Tidy_demog.rds")
 }
