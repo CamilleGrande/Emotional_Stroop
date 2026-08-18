@@ -57,4 +57,7 @@ Tidy.Demographics <- function(data.EST, data.demog) {
                         inner_join(ids, by = "SID")
 
     write_rds(demog, "./0-Data_Prep/Outputs/Tidy_demog.rds")
+
+    all <- inner_join(EST, demog, by = "SID")
+    write_rds(all, "./0-Data_Prep/Outputs/Tidy_all.rds")
 }
