@@ -54,9 +54,12 @@ Tidy.Demographics <- function(data.EST, data.demog) {
                         family_income = as.factor(family_income),
                         .keep = "none"
                     ) |> 
-                        inner_join(ids, by = "SID")
+                        inner_join(ids, by = "SID") |>
+                            ## new
+                            drop_na(sex, ethnicity)
 
     write_rds(demog, "./0-Data_Prep/Outputs/Tidy_demog.rds")
+
 
     all <- inner_join(EST, demog, by = "SID")
     write_rds(all, "./0-Data_Prep/Outputs/Tidy_all.rds")
