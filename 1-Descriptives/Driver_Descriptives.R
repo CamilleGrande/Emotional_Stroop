@@ -12,9 +12,7 @@
     source("./1-Descriptives/Utilities_Descriptives.R")
     
 ## Paths
-    EST.Tidy = "./0-Data_Prep/Outputs/Tidy_EST.rds"
-    Demog.Tidy = "./0-Data_Prep/Outputs/Tidy_demog.rds"
+    Data.Tidy = "./0-Data_Prep/Outputs/Tidy_all.rds"
 
-
-EST.Descriptives(EST.Tidy)
-Demographics.Descriptives(Demog.Tidy)
+EST.Descriptives(Data.Tidy)
+Demographics.Descriptives(Data.Tidy)

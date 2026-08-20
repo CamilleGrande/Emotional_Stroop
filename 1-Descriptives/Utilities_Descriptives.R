@@ -156,13 +156,14 @@ Frequency.Summary <- function(vars) {
 ## This function computes numeric/frequency summaries for the descriptive stats
 Demographics.Descriptives <- function(data.demog) {
 
-    demog <- read_rds(data.demog)
+    demog <- read_rds(data.demog) |>
+                distinct(SID, .keep_all = TRUE)
 
     numeric_vars <- select(demog, all_of(c("age")))
     numeric_summary <- Numeric.Summary(numeric_vars)
     write.csv(numeric_summary, "./1-Descriptives/Outputs/Numeric_Descriptives.csv", row.names = F)
 
-    frequency_vars <- select(demog, -all_of(c("age")))
+    frequency_vars <- select(demog, all_of(c("SID", "sex", "gender_diversity", "ethnicity", "family_income")))
     frequency_summary <- Frequency.Summary(frequency_vars)
     write.csv(frequency_summary, "./1-Descriptives/Outputs/Frequency_Descriptives.csv", row.names = F)
 }
