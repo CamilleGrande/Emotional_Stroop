@@ -27,13 +27,31 @@ Tidy.EST <- function(data) {
                                                     reaction_time = as.numeric(latency),
                                                     word_y = as.factor(word_y),
                                                     word_position = as.factor(wordposition),
-                                                    .keep = "unused")
+                                                    .keep = "unused") |>
+                                                        ## One subject has 0% accuracy and another 16% so excluding them
+                                                        subset(SID != "TAY01_CMH_00000248" & SID != "TAY01_CMH_00000543")
+    
+    ## Excluded anticipated and timed-out trials
+    cat("\n\nExcluding anticipated trials (RT < 200ms) and time-out sessions (RT ceiling 2000ms)\n")
 
+    to_exclude <- data.frame(excluded_timeout = sum(my.data$reaction_time >= 2000), excluded_anticipatory = sum(my.data$reaction_time < 200))
+    write.csv(to_exclude, "./0-Data_Prep/Outputs/Sum_Excluded_Trials.csv", row.names = F)
+
+    ## 822 trials should be excluded total (ceiling + floor)
+    ## ceiling were also all incorrect
+    dat_clean <- subset(my.data, my.data$reaction_time >= 200 & my.data$reaction_time < 2000)
+
+        cat(paste0("\nCheck all trials where RT < 200ms or >= 2000ms (time-out) were correctly excluded:\n\nSum trials < 200ms: ",
+        sum(dat_clean$reaction_time < 200),
+        "\nSum trials >= 2000ms: ", 
+        sum(dat_clean$reaction_time >= 2000), 
+        "\n\nIf both not 0, there is a problem\n"))
+                                                    
     ## Ordering variables
-    my.data <- my.data[, c("SID", "frequency", "congruence", "face_emotion", "word_emotion", "word", "correct_button", "response", "correct", "reaction_time",
+    dat_clean <- dat_clean[, c("SID", "frequency", "congruence", "face_emotion", "word_emotion", "word", "correct_button", "response", "correct", "reaction_time",
                             "word_y", "word_position")]
 
-    write_rds(my.data, "./0-Data_Prep/Outputs/Tidy_EST.rds")
+    write_rds(dat_clean, "./0-Data_Prep/Outputs/Tidy_EST.rds")
 }
 
 
