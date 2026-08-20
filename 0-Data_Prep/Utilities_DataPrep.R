@@ -51,13 +51,13 @@ Tidy.EST <- function(data) {
     dat_clean <- dat_clean[, c("SID", "frequency", "congruence", "face_emotion", "word_emotion", "word", "correct_button", "response", "correct", "reaction_time",
                             "word_y", "word_position")]
 
-    write_rds(dat_clean, "./0-Data_Prep/Outputs/Tidy_EST.rds")
+    return(dat_clean)
 }
 
 
-Tidy.Demographics <- function(data.EST, data.demog) {
+Tidy.Data <- function(data.EST, data.demog) {
 
-    EST <- read_rds(data.EST)
+    EST <- Tidy.EST(data.EST)
 
     ids <- as.data.frame(unique(EST$SID))
     colnames(ids) <- "SID"
@@ -72,13 +72,20 @@ Tidy.Demographics <- function(data.EST, data.demog) {
                         family_income = as.factor(family_income),
                         .keep = "none"
                     ) |> 
-                        inner_join(ids, by = "SID") |>
-                            ## new
-                            drop_na(sex, ethnicity)
+                        inner_join(ids, by = "SID")
 
-    write_rds(demog, "./0-Data_Prep/Outputs/Tidy_demog.rds")
+    demog_after_exclusions <- demog |>
+                                drop_na(sex, ethnicity)
+
+    sum_exclusions <- setdiff(demog, demog_after_exclusions) |>
+                        mutate(
+                            missing_sex = sum(is.na(sex)),
+                            missing_ethnicity = sum(is.na(ethnicity)),
+                            .keep = "none")
+
+    write_csv(sum_exclusions, "./0-Data_Prep/Outputs/Sum_Excluded_Demographics.csv")
 
 
-    all <- inner_join(EST, demog, by = "SID")
+    all <- inner_join(EST, demog_after_exclusions, by = "SID")
     write_rds(all, "./0-Data_Prep/Outputs/Tidy_all.rds")
 }

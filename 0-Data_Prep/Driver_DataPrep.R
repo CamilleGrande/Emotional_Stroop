@@ -12,10 +12,8 @@
     
 ## Paths
     EST.Raw = "./Working_Data/data/cognitive/emotional_stroop_raw_score.csv"
-    Demographics = "./Working_Data/datacut_demographics_core_data.csv"
-    EST.Tidy = "./0-Data_Prep/Outputs/Tidy_EST.rds"
+    Demographics.Raw = "./Working_Data/datacut_demographics_core_data.csv"
 
 
 ## Clean data
-    Tidy.EST(EST.Raw)
-    Tidy.Demographics(EST.Tidy, Demographics)
+    Tidy.Data(EST.Raw, Demographics.Raw)
