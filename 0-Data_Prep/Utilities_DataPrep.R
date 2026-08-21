@@ -66,6 +66,7 @@ Tidy.Data <- function(data.EST, data.demog) {
                     mutate(
                         SID = subject_id,
                         age = as.numeric(age_enrolment),
+                        log_age = log(age),
                         sex = as.factor(assigned_sex_at_birth),
                         gender_diversity = as.factor(gender_diversity),
                         ethnicity = as.factor(ethnicity),
@@ -75,13 +76,17 @@ Tidy.Data <- function(data.EST, data.demog) {
                         inner_join(ids, by = "SID")
 
     demog_after_exclusions <- demog |>
-                                drop_na(sex, ethnicity)
+                                drop_na(sex, ethnicity) |>
+                                    subset(sex != "Intersex") |>
+                                        ## need to exclude "intersex" factor
+                                        mutate(sex = as.character(sex), .keep = "unused") |>
+                                            mutate(sex = as.factor(sex), .keep = "unused")
 
     sum_exclusions <- setdiff(demog, demog_after_exclusions) |>
-                        mutate(
+                        summarise(
                             missing_sex = sum(is.na(sex)),
                             missing_ethnicity = sum(is.na(ethnicity)),
-                            .keep = "none")
+                            sex_intersex = sum(sex == "Intersex", na.rm = TRUE))
 
     write_csv(sum_exclusions, "./0-Data_Prep/Outputs/Sum_Excluded_Demographics.csv")
 
