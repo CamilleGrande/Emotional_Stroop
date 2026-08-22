@@ -1,0 +1,159 @@
+## Utilities_Task_Cond_Effect.R
+## Author: Camille Grandé
+## Description:
+##      This script holds the utility functions to run the stats to test the task conditions effect for the emotional stroop task analysis
+
+Modelling.RT <- function(EST.data, cog.data) {
+
+    dat <- read_rds(EST.data) |>
+                ## Keeping only RT for correct trials
+                subset(correct == "correct") 
+    
+    cog <- read_csv(cog.data) |>
+            rename(SID = PIN)
+
+    dat <- inner_join(dat, cog, by = "SID")
+
+    ## Set sum contrasts so Type III main effects are correctly averaged
+    contrasts(dat$congruence)   <- contr.sum(nlevels(dat$congruence))
+    contrasts(dat$frequency)    <- contr.sum(nlevels(dat$frequency))
+    contrasts(dat$face_emotion) <- contr.sum(nlevels(dat$face_emotion))
+    contrasts(dat$sex)          <- contr.sum(nlevels(dat$sex))
+    contrasts(dat$ethnicity)    <- contr.sum(nlevels(dat$ethnicity))
+
+    ## Initial model
+    model1 <- lmer(reaction_time ~ congruence * frequency * face_emotion + f1 + f2 + f3 + log_age + sex + ethnicity 
+                    + (1 | SID),
+                    data = dat, REML = T)
+    
+
+    cat("\nResiduals are distributed in fan-shape; log-scoring the RT\n")
+    ## Compute RT log-scores
+    dat$log_rt <- log(dat$reaction_time)
+
+    ## Excluded trials + RT Log-scored
+    model2 <- lmer(log_rt ~ congruence * frequency * face_emotion + f1 + f2 + f3 + log_age + sex + ethnicity 
+                    + (1 | SID),
+                    data = dat, REML = T)
+    
+    write_rds(model2, "./3-Cognitive_Factors_Effect/Outputs/RT_Final_Model_results.rds")
+
+
+    ## Residuals are linearly distributed (similar deviations)
+    ## Homoskedasticity OK (no funnel plot)
+    ## Normality of residuals OK 
+    ## (see the two plots below)
+
+    ## Check collinearity among fixed effects
+    collinearity <- check_collinearity(model2)
+    cat("\nLook at csv to assess collinearity\n")
+    write_csv(collinearity, "./3-Cognitive_Factors_Effect/Outputs/RT_Collinearity.csv")
+
+    cat("\nAssumptions for LME all met; look at plots!\n\n")
+    pdf("./3-Cognitive_Factors_Effect/Outputs/RT_Assumptions.pdf")
+        # model 1
+        plot(fitted(model1), residuals(model1),
+                ylab = "Residuals", xlab = "Reaction Time (ms)",
+                main = "Residuals against observed RT (Initial model)")
+        # model 2
+        plot(fitted(model2), residuals(model2),
+                ylab = "Residuals", xlab = "log-scored Reaction Time",
+                main = "Residuals against log-scored RT (log model)")
+        # normality residuals
+        hist(residuals(model2), 
+                ylab = "Frequency", xlab = "Residuals",
+                main = "Histogram of residuals")
+        qqnorm(residuals(model2),
+                main = "QQ-plot of residuals")
+    dev.off()
+
+    return(model2)
+}
+
+
+ANOVA.RT <- function(data, cog.data) {
+
+    model <- Modelling.RT(data, cog.data)
+
+    my.anova <- anova(model)
+    my.ef <- eta_squared(my.anova, partial = TRUE) |> rename(term = Parameter)
+    
+    summary <- my.anova |> rownames_to_column("term") |> left_join(my.ef, by = "term")
+
+    write.csv(summary, "./3-Cognitive_Factors_Effect/Outputs/RT_Anova_results.csv")
+}
+
+
+
+Modelling.Accuracy <- function(EST.data, cog.data) {
+
+    dat <- read_rds(EST.data)
+
+    cog <- read_csv(cog.data) |>
+            rename(SID = PIN)
+
+    dat <- inner_join(dat, cog, by = "SID")
+
+    dat <- dat |> 
+                mutate(correct = case_when(
+                    correct == "correct"   ~ 1,
+                    correct == "incorrect" ~ 0
+                ), .keep = "unused")
+    
+    ## Set sum contrasts so Type III main effects are correctly averaged
+    contrasts(dat$congruence)   <- contr.sum(nlevels(dat$congruence))
+    contrasts(dat$frequency)    <- contr.sum(nlevels(dat$frequency))
+    contrasts(dat$face_emotion) <- contr.sum(nlevels(dat$face_emotion))
+    contrasts(dat$sex)          <- contr.sum(nlevels(dat$sex))
+    contrasts(dat$ethnicity)    <- contr.sum(nlevels(dat$ethnicity))
+
+    ## random interecpt only as random slope increases dispersion
+    accuracy <- glmer(correct ~ congruence * frequency * face_emotion + f1 + f2 + f3 + log_age + sex + ethnicity
+                    + (1 | SID),
+                    data = dat, family = binomial(link = "logit"))
+
+    write_rds(accuracy, "./3-Cognitive_Factors_Effect/Outputs/Accuracy_Model_results.rds")
+
+
+    cat("\nChecking assumptions for our Binomial Generalized Linear Mixed Model\n")
+
+    ## Check collinearity among fixed effects
+    ## Computes VIF, 0-5 = low, 5-10 = moderate, > 10 = high multicollinearity
+    collinearity <- check_collinearity(accuracy)
+    cat("\nLook at csv to assess collinearity\n")
+    write_csv(collinearity, "./3-Cognitive_Factors_Effect/Outputs/Accuracy_Collinearity.csv")
+
+
+    ## Simulation-based residual diagnostics (DHARMa)
+    ## Calculates randomized quantile residuals 
+    sim_res <- simulateResiduals(fittedModel = accuracy, n = 1000, plot = F)
+
+    pdf("./3-Cognitive_Factors_Effect/Outputs/Accuracy_Assumptions.pdf")
+        ## QQ plot + residual plot residuals fitted vs. simulated
+        plot(sim_res)
+        ## Dispersion check
+        testDispersion(sim_res)
+        ## plot outliers
+        testOutliers(sim_res)
+        testUniformity(sim_res)
+        ## Residuals against predictors
+        plotResiduals(sim_res, form = dat$congruence)
+        plotResiduals(sim_res, form = dat$frequency)
+        plotResiduals(sim_res, form = dat$face_emotion)
+        plotResiduals(sim_res, form = dat$log_age)
+        plotResiduals(sim_res, form = dat$sex)
+        plotResiduals(sim_res, form = dat$ethnicity)
+    dev.off()
+
+    return(accuracy)
+}
+
+
+ChiSq.Accuracy <- function(data, cog.data) {
+
+    model <- Modelling.Accuracy(data, cog.data)
+
+    ## Wald χ² tests
+    chisq <- car::Anova(model, type = 3)
+    write.csv(chisq, "./3-Cognitive_Factors_Effect/Outputs/Accuracy_ChiSq_results.csv")
+}
