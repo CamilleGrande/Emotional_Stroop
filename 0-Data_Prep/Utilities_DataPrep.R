@@ -220,8 +220,7 @@ Tidy.LMT <- function(filename) {
 
 
 ## Summarizes n participants with missing data for each test
-Missing.Data <- function(NIH.Tidy, RAVLT.Tidy, Matrices.Tidy, LMT.Tidy) {
-
+Missing.Data.Cog <- function(NIH.Tidy, RAVLT.Tidy, Matrices.Tidy, LMT.Tidy) {
 
     summarise_missing <- function(data, test_name) {
         data |>
@@ -244,6 +243,8 @@ Missing.Data <- function(NIH.Tidy, RAVLT.Tidy, Matrices.Tidy, LMT.Tidy) {
     
 }
 
+
+## Tidies cognitive data
 Tidy.Cognition <- function(NIH.Raw, RAVLT.Raw, Matrices.Raw, LMT.Raw) {
 
     NIH <- Tidy.NIH(NIH.Raw)
@@ -251,11 +252,118 @@ Tidy.Cognition <- function(NIH.Raw, RAVLT.Raw, Matrices.Raw, LMT.Raw) {
     Matrices <- Tidy.Matrices(Matrices.Raw, "Raw.score", "Raw")
     LMT <- Tidy.LMT(LMT.Raw)
 
-    Missing.Data(NIH, RAVLT, Matrices, LMT)
+    Missing.Data.Cog(NIH, RAVLT, Matrices, LMT)
 
     cog <- full_join(NIH, Matrices, by = "PIN") |>
             full_join(RAVLT, by = "PIN") |>
                 full_join(LMT, by = "PIN")
     
     write_rds(cog, "./0-Data_Prep/Outputs/Tidy_cognition.rds")
+}
+
+
+## This function cleans the item "previous suicide attempt" of the C-SSRS
+Tidy.CSSRS <- function(filename) {
+   
+    suicide <- Load.Data(filename) |>
+                    rename(SID = "subject_id") |>
+                            distinct(SID, .keep_all = T) |>
+                                arrange(SID) |>
+                                    select(all_of(c("SID", "cssrs_attempt_lt"))) |>
+                                        mutate(as.integer(cssrs_attempt_lt), .keep = "unused")
+
+    ## Participants with no missing data:
+    suicide |>
+        drop_na() |>
+            write.csv("./0-Data_Prep/Outputs/CSSRS.csv", row.names = F)
+
+    return(suicide)
+}
+
+
+## This function selects the appropriate score for each A/YSR file 
+## because of coding difference in column names
+AYSR.Select.Score <- function(data, score.type) {
+
+    ASR_t <- c("asr_syndr_anxdepr_t", "asr_syndr_withdrdep_t", "asr_syndr_somatic_t", "asr_syndr_thought_t",
+                    "asr_syndr_attention_t", "asr_syndr_aggressive_t", "asr_syndr_rulebreaking_t")
+    
+    ASR_t_GI <- c("asr_syndr_anxdepr_t", "asr_syndr_withdrdepr_t", "asr_syndr_somatic_t", "asr_syndr_thought_t",
+                    "asr_syndr_attention_t", "asr_syndr_aggressive_t", "asr_syndr_rulebreaking_t")
+
+    YSR_t <- c("ysr_syndr_anxdepr_t", "ysr_syndr_withdrdepr_t", "ysr_syndr_somatic_t", "ysr_syndr_thought_t", 
+                    "ysr_syndr_attention_t", "ysr_syndr_aggressive_t", "ysr_syndr_rulebreaking_t")
+    
+    lookup <- c("withdrdepr_t" = "withdrdep_t", "withdrdepr_p" = "withdrdep_p")
+
+    Load.Data(data) |>
+        rename(SID = "subject_id") |>
+            arrange(SID) |>
+                ## Select our columns
+                select(all_of(c("SID", get(score.type)))) |>
+                    ## 9999 also = NA, so put all as NAs
+                    mutate(across(-SID, ~ na_if(.x, 9999))) |>
+                        ## cleans our names for next step: merging!
+                        rename_with(~str_remove(.x, "asr_syndr_")) |>
+                        rename_with(~str_remove(.x, "ysr_syndr_")) |>
+                        rename(any_of(lookup))
+    
+}
+
+
+## This function tidies the ASR and YSR in one clean dataset
+Tidy.AYSR <- function(data.ASR, data.ASR.GI, data.YSR, data.YSR.GI) {
+
+    ASR <- AYSR.Select.Score(data.ASR, "ASR_t")
+    ASR_GI <- AYSR.Select.Score(data.ASR.GI, "ASR_t_GI")
+    YSR <- AYSR.Select.Score(data.YSR, "YSR_t")
+    YSR_GI <- AYSR.Select.Score(data.YSR.GI, "YSR_t")
+
+    ## put together YSR and ASR data
+    YASR <- rows_patch(ASR, YSR, by = "SID")
+
+    ## add gender inclusive data
+    GI <- rows_patch(YSR_GI, ASR_GI, by = "SID")
+        YASR <- rows_upsert(YASR, GI, by = "SID") |>
+                arrange(SID)
+
+    YASR |>
+        drop_na() |>
+            write.csv("./0-Data_Prep/Outputs/YASR_t.csv", row.names = F)
+
+    return(YASR)
+}
+
+
+## Summarizes n participants with missing data for each test
+Missing.Data.Clin <- function(suicide.Tidy, aysr.Tidy) {
+
+    summarise_missing <- function(data, test_name) {
+        data |>
+            summarise(
+                test = test_name,
+                n_total = n(),
+                n_missing = sum(if_any(everything(), is.na)),
+                pct_missing = round(100 * n_missing / n_total, 1)
+            )
+    }
+
+    summary_table <- bind_rows(
+        summarise_missing(suicide.Tidy, "Suicide_Attempt"),
+        summarise_missing(aysr.Tidy, "AYSR")
+    )
+
+    write.csv(summary_table, "./0-Data_Prep/Outputs/Sum_Missing_Clinical.csv", row.names = F)
+}
+
+
+Tidy.Clinical <- function(CSSRS.Raw, ASR.raw, ASR.GI.raw, YSR.raw, YSR.GI.raw) {
+
+    suicide <- Tidy.CSSRS(CSSRS.Raw)
+    AYSR <- Tidy.AYSR(ASR.raw, ASR.GI.raw, YSR.raw, YSR.GI.raw)
+   
+    Missing.Data.Clin(suicide, AYSR)
+    
+    write_rds(AYSR, "./0-Data_Prep/Outputs/Tidy_clinical.rds")
+    write_rds(suicide, "./0-Data_Prep/Outputs/Tidy_suicide_att.rds")
 }
