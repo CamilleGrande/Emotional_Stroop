@@ -94,3 +94,168 @@ Tidy.Data <- function(data.EST, data.demog) {
     all <- inner_join(EST, demog_after_exclusions, by = "SID")
     write_rds(all, "./0-Data_Prep/Outputs/Tidy_all.rds")
 }
+
+
+## Functions used in NIH data cleaning
+Load.Data <- function(data) {
+     dat <- as.data.frame(read.csv(data, na = c("NA", "PNA", "UNK", "Prefer not to answer", "MI", "NASK", "ASKU", " ", "", "NCO", "NI", "OTH")))
+     return(dat)
+}
+
+Unite.Data <- function(data, new.name, col1, col2) {
+    data |> 
+        unite({{ new.name }}, {{ col1 }}, {{ col2 }}, na.rm = T, remove = T) |>
+            mutate({{ new.name }} := as.integer({{ new.name }}))
+}
+
+
+## NIH toolbox data cleaning
+Tidy.NIH <- function(data) {
+
+    NIH <- Load.Data(data) |> 
+            filter(str_detect(Inst, "NIH Toolbox") & !is.na(Uncorrected.Standard.Score) & InstrumentBreakoff == 2) |>
+                select(all_of(c("PIN", "Inst", "Uncorrected.Standard.Score", "Age.Corrected.Standard.Score", "National.Percentile.age.adjusted"))) |>
+                    arrange(PIN)
+
+    ## Used to rename columns
+    lookup <- c(NIH_Picture_Vocab = "NIH Toolbox Picture Vocabulary Test Age 3+ v2.1", 
+                NIH_Reading_Recog = "NIH Toolbox Oral Reading Recognition Test Age 3+ v2.1",
+                NIH_Pattern_Comp = "NIH Toolbox Pattern Comparison Processing Speed Test Age 7+ v2.1",
+                NIH_List_Sort = "NIH Toolbox List Sorting Working Memory Test Age 7+ v2.1",
+                NIH_Picture_Seq = "NIH Toolbox Picture Sequence Memory Test Age 8+ Form A v2.1")
+
+
+    NIH <- NIH |>
+            pivot_wider(id_cols = "PIN", names_from = "Inst", values_from ="Uncorrected.Standard.Score") |>
+                rename(any_of(lookup)) |>
+                    Unite.Data(NIH_Flanker, "NIH Toolbox Flanker Inhibitory Control and Attention Test Age 12+ v2.1", 
+                            "NIH Toolbox Flanker Inhibitory Control and Attention Test Ages 8-11 v2.1") |>
+                                Unite.Data(NIH_Card_Sort, "NIH Toolbox Dimensional Change Card Sort Test Age 12+ v2.1",
+                                                "NIH Toolbox Dimensional Change Card Sort Test Ages 8-11 v2.1")
+
+    write.csv(NIH, "./0-Data_Prep/Outputs/NIH_Raw_7.csv", row.names = F)
+
+    return(NIH)
+}
+
+
+## RAVLT data cleaning
+Tidy.RAVLT <- function(filename) {
+    
+    RAVLT <- Load.Data(filename)|>
+                arrange(kcni_participant_id) |>
+                    rename(PIN = "kcni_participant_id") |>
+                        pivot_wider(id_cols = "PIN", names_from = "Item", values_from = "Raw.score") |>
+                            mutate(across(starts_with("RAVLT"), as.integer)) |>
+                                select(all_of(c("PIN", "RAVLT Short Delay Trial I", "RAVLT Short Delay Trial II", "RAVLT Short Delay Trial III", "RAVLT Short Delay Trial IV", 
+                                        "RAVLT Short Delay Trial V", "RAVLT Short Delay List B Trial", "RAVLT Short Delay Trial VI", "RAVLT Long Delay Trial VII"))) |>
+                                    rename(
+                                        RAVLT_Short_1 = "RAVLT Short Delay Trial I", 
+                                        RAVLT_Short_2 = "RAVLT Short Delay Trial II", 
+                                        RAVLT_Short_3 = "RAVLT Short Delay Trial III",
+                                        RAVLT_Short_4 = "RAVLT Short Delay Trial IV", 
+                                        RAVLT_Short_5 = "RAVLT Short Delay Trial V", 
+                                        RAVLT_List_B = "RAVLT Short Delay List B Trial",
+                                        RAVLT_Short_PostB = "RAVLT Short Delay Trial VI", 
+                                        RAVLT_Long = "RAVLT Long Delay Trial VII"
+                                    )
+    
+    RAVLT_Total <- RAVLT |> 
+                    select(all_of(c("RAVLT_Short_1", "RAVLT_Short_2", "RAVLT_Short_3", "RAVLT_Short_4", "RAVLT_Short_5", "RAVLT_Short_PostB", "RAVLT_Long"))) |>
+                        apply(1, sum)
+
+    RAVLT$RAVLT_Total <- RAVLT_Total
+
+    ## Participants with no missing data:
+    RAVLT |>
+        drop_na() |>
+            write.csv("./0-Data_Prep/Outputs/RAVLT.csv", row.names = F)
+    
+    return(RAVLT)
+}
+
+
+## Matrices test data cleaning
+Tidy.Matrices <- function(filename, score.type, path) {
+
+    lookup <- paste0("MATRIX_", score.type)
+
+    Matrices <- Load.Data(filename) |>
+                    arrange(kcni_participant_id) |>
+                        rename(PIN = "kcni_participant_id") |>
+                            select(all_of(c("PIN", "Subtest", {{ score.type }} ))) |>
+                                filter(str_detect(Subtest, "Reasoning")) |>
+                                    distinct(.keep_all = F) |>
+                                        pivot_wider(id_cols = "PIN", names_from = "Subtest", values_from = {{ score.type }}) |>
+                                            Unite.Data(MATRICES, "WISC-V-CDN Matrix Reasoning", "WAIS-IV-CDN Matrix Reasoning")
+
+    ## Participants with no missing data:
+    Matrices |>
+        drop_na() |>
+            write.csv(paste0("./0-Data_Prep/Outputs/Matrix_", {{ path }}, ".csv"), row.names = F)
+
+    return(Matrices)
+}
+
+
+## Little man task data cleaning
+Tidy.LMT <- function(filename) {
+
+    LMT <- Load.Data(filename) |>
+                select(all_of(c("kcni_participant_id", "propCorrect", "meanRT"))) |>
+                    arrange(kcni_participant_id) |>
+                        rename(
+                            PIN = "kcni_participant_id", 
+                            LMT_Prop_Accurate = "propCorrect", 
+                            LMT_Mean_RT = "meanRT"
+                        ) |>
+                                distinct(PIN, .keep_all = T) |>
+                                    ## computes efficiency score and creates new column to hold the values
+                                    mutate(LMT_Efficiency = (LMT_Prop_Accurate / LMT_Mean_RT) * 1000)
+
+    write.csv(LMT, "./0-Data_Prep/Outputs/LittleManTask.csv", row.names = F)
+
+    return(LMT)
+}
+
+
+## Summarizes n participants with missing data for each test
+Missing.Data <- function(NIH.Tidy, RAVLT.Tidy, Matrices.Tidy, LMT.Tidy) {
+
+
+    summarise_missing <- function(data, test_name) {
+        data |>
+            summarise(
+                test = test_name,
+                n_total = n(),
+                n_missing = sum(if_any(everything(), is.na)),
+                pct_missing = round(100 * n_missing / n_total, 1)
+            )
+    }
+
+    summary_table <- bind_rows(
+        summarise_missing(NIH.Tidy, "NIH"),
+        summarise_missing(RAVLT.Tidy, "RAVLT"),
+        summarise_missing(Matrices.Tidy, "Matrices"),
+        summarise_missing(LMT.Tidy, "LMT")
+    )
+
+    write.csv(summary_table, "./0-Data_Prep/Outputs/Sum_Missing_Cognition.csv", row.names = F)
+    
+}
+
+Tidy.Cognition <- function(NIH.Raw, RAVLT.Raw, Matrices.Raw, LMT.Raw) {
+
+    NIH <- Tidy.NIH(NIH.Raw)
+    RAVLT <- Tidy.RAVLT(RAVLT.Raw)
+    Matrices <- Tidy.Matrices(Matrices.Raw, "Raw.score", "Raw")
+    LMT <- Tidy.LMT(LMT.Raw)
+
+    Missing.Data(NIH, RAVLT, Matrices, LMT)
+
+    cog <- full_join(NIH, Matrices, by = "PIN") |>
+            full_join(RAVLT, by = "PIN") |>
+                full_join(LMT, by = "PIN")
+    
+    write_rds(cog, "./0-Data_Prep/Outputs/Tidy_cognition.rds")
+}
