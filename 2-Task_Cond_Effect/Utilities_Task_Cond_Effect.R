@@ -19,7 +19,7 @@ Modelling.RT <- function(data) {
 
     ## Initial model
     model1 <- lmer(reaction_time ~ congruence * frequency * face_emotion + log_age + sex + ethnicity 
-                    + (1 + congruence + frequency + face_emotion | SID),
+                    + (1 | SID),
                     data = dat, REML = T)
     
 
@@ -29,12 +29,8 @@ Modelling.RT <- function(data) {
 
     ## Excluded trials + RT Log-scored
     model2 <- lmer(log_rt ~ congruence * frequency * face_emotion + log_age + sex + ethnicity 
-                    + (1 + congruence + frequency + face_emotion | SID),
+                    + (1 | SID),
                     data = dat, REML = T)
-    
-    ## If this is significant, random slope improves the model
-    anova_random_slopes <- ranova(model2)
-    write_rds(anova_random_slopes, "./2-Task_Cond_Effect/Outputs/RT_Random_slopes_improvement_results.rds")
 
     write_rds(model2, "./2-Task_Cond_Effect/Outputs/RT_Final_Model_results.rds")
 
