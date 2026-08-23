@@ -10,13 +10,6 @@ Modelling.RT <- function(data) {
                 ## Keeping only RT for correct trials
                 subset(correct == "correct") 
 
-    ## Set sum contrasts so Type III main effects are correctly averaged
-    contrasts(dat$congruence)   <- contr.sum(nlevels(dat$congruence))
-    contrasts(dat$frequency)    <- contr.sum(nlevels(dat$frequency))
-    contrasts(dat$face_emotion) <- contr.sum(nlevels(dat$face_emotion))
-    contrasts(dat$sex)          <- contr.sum(nlevels(dat$sex))
-    contrasts(dat$ethnicity)    <- contr.sum(nlevels(dat$ethnicity))
-
     ## Initial model
     model1 <- lmer(reaction_time ~ congruence * frequency * face_emotion + log_age + sex + ethnicity 
                     + (1 | SID),
@@ -91,13 +84,6 @@ Modelling.Accuracy <- function(data) {
                     correct == "incorrect" ~ 0
                 ), .keep = "unused")
     
-    ## Set sum contrasts so Type III main effects are correctly averaged
-    contrasts(dat$congruence)   <- contr.sum(nlevels(dat$congruence))
-    contrasts(dat$frequency)    <- contr.sum(nlevels(dat$frequency))
-    contrasts(dat$face_emotion) <- contr.sum(nlevels(dat$face_emotion))
-    contrasts(dat$sex)          <- contr.sum(nlevels(dat$sex))
-    contrasts(dat$ethnicity)    <- contr.sum(nlevels(dat$ethnicity))
-
     ## random interecpt only as random slope increases dispersion
     accuracy <- glmer(correct ~ congruence * frequency * face_emotion + log_age + sex + ethnicity
                     + (1 | SID),
