@@ -7,6 +7,7 @@
 Subject.Level.Descr <- function(my.df, ...) {
 
     summary <- my.df |> 
+                    subset(reaction_time > 200 & reaction_time < 2000) |>
                     group_by(...) |>
                         summarise(Mean_Accuracy = sum(correct == "correct") / sum(!is.na(correct)),
                                     Mean_RT = sum(reaction_time) / sum(!is.na(reaction_time)),
