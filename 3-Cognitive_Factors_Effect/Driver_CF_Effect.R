@@ -1,4 +1,4 @@
-## Utilities_CFA.R
+## Driver_CFA.R
 ## Author: Camille Grandé
 ## Description:
 ##      This script runs the cognition CFA analysis in the TAY sample and the modeling 

@@ -9,10 +9,7 @@ CFA.Analysis <- function(cog.data) {
     cog <- read_rds(cog.data)
 
     efa_vars <- c("NIH_Picture_Vocab", "NIH_Reading_Recog", "NIH_Flanker", "NIH_Card_Sort", "NIH_Pattern_Comp",
-                    "LMT_Efficiency", "NIH_Picture_Seq", "RAVLT_Total", "NIH_List_Sort")
-
-    #efa_vars <- c("NIH_Picture_Vocab", "NIH_Reading_Recog", "NIH_Flanker", "NIH_Card_Sort", "NIH_Pattern_Comp",
-    #                "LMT_Efficiency", "NIH_Picture_Seq", "RAVLT_Total", "NIH_List_Sort", "MATRICES")
+                    "LMT_Efficiency", "NIH_Picture_Seq", "RAVLT_Total", "NIH_List_Sort", "MATRICES")
     
     ## Get all subjects with no NA
     tay_pca_full <- cog[complete.cases(cog[, efa_vars]), ]
@@ -29,14 +26,9 @@ CFA.Analysis <- function(cog.data) {
 
     #Specifiy and run CFA Model for three factor structure consisting of Verbal Ability, Executive Functioning and Learning/Memory# - Note that Matrix cross loads onto F1 and F2# 
     model_3factor <- '
-        f1 =~ NIH_Picture_Vocab + NIH_Reading_Recog
+        f1 =~ NIH_Picture_Vocab + NIH_Reading_Recog + MATRICES
         f2 =~ NIH_Flanker + NIH_Card_Sort + NIH_Pattern_Comp + LMT_Efficiency
-        f3 =~ NIH_Picture_Seq + RAVLT_Total + NIH_List_Sort'
-    
-    #model_3factor <- '
-    #    f1 =~ NIH_Picture_Vocab + NIH_Reading_Recog + MATRICES
-    #    f2 =~ NIH_Flanker + NIH_Card_Sort + NIH_Pattern_Comp + LMT_Efficiency
-    #    f3 =~ NIH_Picture_Seq + RAVLT_Total + NIH_List_Sort + MATRICES'
+        f3 =~ NIH_Picture_Seq + RAVLT_Total + NIH_List_Sort + MATRICES'
 
     fit_3factor <- cfa(model_3factor, data = tay_pca_full, missing = "fiml")
     fs <- as.data.frame(lavPredict(fit_3factor))
