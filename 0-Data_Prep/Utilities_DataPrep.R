@@ -270,7 +270,7 @@ Tidy.CSSRS <- function(filename) {
                             distinct(SID, .keep_all = T) |>
                                 arrange(SID) |>
                                     select(all_of(c("SID", "cssrs_attempt_lt"))) |>
-                                        mutate(as.integer(cssrs_attempt_lt), .keep = "unused")
+                                        mutate(cssrs_attempt_lt = as.integer(cssrs_attempt_lt), .keep = "unused")
 
     ## Participants with no missing data:
     suicide |>
@@ -329,7 +329,7 @@ Tidy.AYSR <- function(data.ASR, data.ASR.GI, data.YSR, data.YSR.GI) {
 
     YASR |>
         drop_na() |>
-            write.csv("./0-Data_Prep/Outputs/YASR_t.csv", row.names = F)
+                    write.csv("./0-Data_Prep/Outputs/YASR_t.csv", row.names = F)
 
     return(YASR)
 }
@@ -364,6 +364,11 @@ Tidy.Clinical <- function(CSSRS.Raw, ASR.raw, ASR.GI.raw, YSR.raw, YSR.GI.raw) {
    
     Missing.Data.Clin(suicide, AYSR)
     
-    write_rds(AYSR, "./0-Data_Prep/Outputs/Tidy_clinical.rds")
-    write_rds(suicide, "./0-Data_Prep/Outputs/Tidy_suicide_att.rds")
+    AYSR |> 
+        drop_na() |> 
+            write_rds("./0-Data_Prep/Outputs/Tidy_clinical.rds")
+    
+    suicide |>
+        drop_na() |>
+            write_rds("./0-Data_Prep/Outputs/Tidy_suicide_att.rds")
 }
