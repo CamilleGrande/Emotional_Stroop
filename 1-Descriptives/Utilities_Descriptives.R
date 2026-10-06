@@ -175,6 +175,13 @@ Descriptives <- function(data.demog, data.cog, data.clinical, data.suicide) {
     ## Keep only subjects used in analysis
     cog <- filter(cog, cog$SID %in% demog$SID)
 
+    efa_vars <- c("NIH_Picture_Vocab", "NIH_Reading_Recog", "NIH_Flanker", "NIH_Card_Sort", "NIH_Pattern_Comp",
+                    "LMT_Efficiency", "NIH_Picture_Seq", "RAVLT_Total", "NIH_List_Sort", "MATRICES")
+
+    ## Get all subjects with no NA
+    tay_pca_full <- cog[complete.cases(cog[, efa_vars]), ]
+    cog <- filter(cog, cog$SID %in% tay_pca_full$SID)
+
     numeric_cog <- select(cog, -all_of(c("SID")))
     numeric_cog_summary <- Numeric.Summary(numeric_cog)
 
