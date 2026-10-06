@@ -19,10 +19,10 @@ Subject.Level.Descr <- function(my.df, ...) {
 Cohort.Level.Descr <- function(subj.level) {
 
     summary <- as.data.frame(subj.level) |>
-                    summarise(Accuracy = mean(Mean_Accuracy) * 100,
-                                SD_Accuracy = sd(Mean_Accuracy) *100,
-                                RT = mean(Mean_RT),
-                                SD_RT = sd(Mean_RT),
+                    summarise(Accuracy = round(mean(Mean_Accuracy) * 100, 2),
+                                SD_Accuracy = round(sd(Mean_Accuracy) *100, 2),
+                                RT = round(mean(Mean_RT), 2),
+                                SD_RT = round(sd(Mean_RT), 2),
                                 .groups = "drop")
     
     return(summary)
@@ -117,14 +117,14 @@ Numeric.Summary <- function(vars) {
                         summarise(across(everything(),
                                     list(
                                             n = ~ sum(!is.na(.x), na.rm = T),
-                                            mean = ~ round(mean(.x, na.rm = T), 3),
-                                            sd = ~ round(sd(.x, na.rm = T), 3),
-                                            median = ~ round(median(.x, na.rm = T), 3),
-                                            iqr = ~ round(IQR(.x, na.rm = T), 3),
-                                            min = ~ round(min(.x, na.rm = T), 3),
-                                            max = ~ round(max(.x, na.rm = T), 3),
-                                            skewness = ~ round(as.numeric(skewness(.x, na.rm = T)), 3), 
-                                            kurtosis = ~ round(as.numeric(kurtosis(.x, na.rm = T)), 3)
+                                            mean = ~ round(mean(.x, na.rm = T), 2),
+                                            sd = ~ round(sd(.x, na.rm = T), 2),
+                                            median = ~ round(median(.x, na.rm = T), 2),
+                                            iqr = ~ round(IQR(.x, na.rm = T), 2),
+                                            min = ~ round(min(.x, na.rm = T), 2),
+                                            max = ~ round(max(.x, na.rm = T), 2),
+                                            skewness = ~ round(as.numeric(skewness(.x, na.rm = T)), 2), 
+                                            kurtosis = ~ round(as.numeric(kurtosis(.x, na.rm = T)), 2)
                                         ), .names = "{.col}.{.fn}"
                                     )) |>
                                         pivot_longer(cols = everything(), names_to = c("variable", ".value"), names_sep = "\\.")
@@ -144,10 +144,10 @@ Frequency.Summary <- function(vars) {
                                     filter(!is.na(level)) |>
                                         count(variable, level, total_n, valid_n, name = "n") |>
                                             group_by(variable) |>
-                                                mutate(pct_valid = round((n / valid_n * 100), 3),
-                                                        pct_total = round((n / total_n * 100), 3),
-                                                        pct_valid_cum = round(cumsum(pct_valid), 3),
-                                                        pct_total_cum = round(cumsum(pct_total), 3)) |>
+                                                mutate(pct_valid = round((n / valid_n * 100), 2),
+                                                        pct_total = round((n / total_n * 100), 2),
+                                                        pct_valid_cum = round(cumsum(pct_valid), 2),
+                                                        pct_total_cum = round(cumsum(pct_total), 2)) |>
                                                     ungroup()
   
   return(frequency_summary)
@@ -155,16 +155,54 @@ Frequency.Summary <- function(vars) {
 
 
 ## This function computes numeric/frequency summaries for the descriptive stats
-Demographics.Descriptives <- function(data.demog) {
+Descriptives <- function(data.demog, data.cog, data.clinical, data.suicide) {
 
+    ## ---- Demographics ----
     demog <- read_rds(data.demog) |>
                 distinct(SID, .keep_all = TRUE)
 
-    numeric_vars <- select(demog, all_of(c("age")))
-    numeric_summary <- Numeric.Summary(numeric_vars)
-    write.csv(numeric_summary, "./1-Descriptives/Outputs/Numeric_Descriptives.csv", row.names = F)
+    numeric_demog <- select(demog, all_of(c("age")))
+    numeric_demog_summary <- Numeric.Summary(numeric_demog)
+    
+    frequency_demog <- select(demog, all_of(c("SID", "sex", "gender_diversity", "ethnicity", "family_income")))
+    frequency_demog_summary <- Frequency.Summary(frequency_demog)
 
-    frequency_vars <- select(demog, all_of(c("SID", "sex", "gender_diversity", "ethnicity", "family_income")))
-    frequency_summary <- Frequency.Summary(frequency_vars)
-    write.csv(frequency_summary, "./1-Descriptives/Outputs/Frequency_Descriptives.csv", row.names = F)
+
+    ## ---- Cognition ----
+    cog <- read_rds(data.cog) |>
+                rename(SID = "PIN")
+    
+    ## Keep only subjects used in analysis
+    cog <- filter(cog, cog$SID %in% demog$SID)
+
+    numeric_cog <- select(cog, -all_of(c("SID")))
+    numeric_cog_summary <- Numeric.Summary(numeric_cog)
+
+
+    ## ---- Clinical symptoms ----
+    clinical <- read_rds(data.clinical)
+
+    ## Keep only subjects used in analysis
+    clinical <- filter(clinical, clinical$SID %in% demog$SID)
+
+    numeric_clinical <- select(clinical, -all_of(c("SID")))
+    numeric_clinical_summary <- Numeric.Summary(numeric_clinical)
+
+
+    ## ---- Suicide attempt ----
+    suicide <- read_rds(data.suicide) |>
+                mutate(cssrs_attempt_lt = as.factor(cssrs_attempt_lt), .keep = "unused")
+
+    ## Keep only subjects used in analysis
+    suicide <- filter(suicide, suicide$SID %in% demog$SID)
+
+    frequency_suicide_summary <- Frequency.Summary(suicide)
+
+
+    ## Bind all summaries
+    all_numeric <- bind_rows(numeric_demog_summary, numeric_cog_summary, numeric_clinical_summary)
+    all_frequency <- bind_rows(frequency_demog_summary, frequency_suicide_summary)
+
+    write.csv(all_numeric, "./1-Descriptives/Outputs/Numeric_Descriptives.csv", row.names = F)
+    write.csv(all_frequency, "./1-Descriptives/Outputs/Frequency_Descriptives.csv", row.names = F)
 }
