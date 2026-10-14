@@ -84,7 +84,7 @@ Modelling.Accuracy <- function(data) {
                     correct == "incorrect" ~ 0
                 ), .keep = "unused")
     
-    ## random interecpt only as random slope increases dispersion
+    ## random intercept only as random slope increases dispersion
     accuracy <- glmer(correct ~ congruence * frequency * face_emotion + log_age + sex + ethnicity
                     + (1 | SID),
                     data = dat, family = binomial(link = "logit"))
@@ -130,7 +130,64 @@ ChiSq.Accuracy <- function(data) {
 
     model <- Modelling.Accuracy(data)
 
-    ## Wald χ² tests
-    chisq <- car::Anova(model, type = 3)
-    write.csv(chisq, "./2-Task_Cond_Effect/Outputs/Accuracy_ChiSq_results.csv")
+    ## computes odds ratios and their CI
+    ## reports coefficient comparing a specific level to the reference level
+    OR_table <- tidy(model, effects = "fixed") |>
+                    mutate(
+                        OR = exp(estimate),
+                        OR_low = exp(estimate - 1.96 * std.error),
+                        OR_high = exp(estimate + 1.96 * std.error))
+
+    write.csv(OR_table, "./2-Task_Cond_Effect/Outputs/Accuracy_OR_results.csv")
+
+    ## Wald tests (χ² distribution)
+    ## tests that the tested coefficient is zero, given everything else in the model?
+
+
+    ## tests overall effect of the factor
+    ## here we are doing a likelihood ratio test where we perform model comparison
+    ## on the full model vs alternative model which excludes each predictor
+    ## is is LR or chisquare or same thing?
+    ## Wald test that the relevant coefficients are jointly zero, given everything else in the model.
+    chisq_table <- car::Anova(model, type = 3) |>
+        as.data.frame() |>
+            tibble::rownames_to_column("term")    
+    
+    write.csv(chisq_table, "./2-Task_Cond_Effect/Outputs/Accuracy_ChiSq_results.csv")
 }
+
+
+## dat$var <- scale(dat$var) to center variables? only age?
+library(afex)
+accuracy_afex <- afex::mixed(correct ~ congruence * frequency * face_emotion + log_age + sex + ethnicity
+                     + (1 | SID), family = binomial(), data = dat, method = "LRT")
+
+## Wald z test
+## one row per coeff
+## uses dummy coding for contrasts, each coeff is a difference from the reference level
+summary(accuracy)
+## report result of accuracy_afex or summary(accuracy_afex) ?
+
+## LRT chi square
+## one row per model term
+## Each test compares the full model against one with that term’s columns removed (Type 3)
+## A factor with 3+ levels gets a single omnibus test here, rather than several coefficient rows.
+## this is the table we use for reporting
+accuracy_afex
+
+## Wald z test, not LRT!!
+## summary of accuracy_afex$full_model
+## but refits the model with sum to zero contrasts
+## Each coefficient is a deviation from the grand mean (e.g., congruence1, not congruenceIncongruent)
+summary(accuracy_afex)
+
+
+
+## to do:
+##      still ORs or not needed? OR for RT too?
+##      get rid of car::Anova and implement afex::mixed for accuracy
+##      afex:mixed for RT too?
+##      can save output as csv?
+##      contrasts?
+##      scaling (centering) of variables? Age only?
+##      coefficients RT?
