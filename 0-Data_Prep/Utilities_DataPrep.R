@@ -66,7 +66,9 @@ Tidy.Data <- function(data.EST, data.demog) {
                     mutate(
                         SID = subject_id,
                         age = as.numeric(age_enrolment),
-                        log_age = log(age),
+                        ## Centering log age for easier interpretation
+                        ## The intercept will now refer to an average-aged participant
+                        log_age = log(age) - mean(log(age)),
                         sex = as.factor(assigned_sex_at_birth),
                         gender_diversity = as.factor(gender_diversity),
                         ethnicity = as.factor(ethnicity),
