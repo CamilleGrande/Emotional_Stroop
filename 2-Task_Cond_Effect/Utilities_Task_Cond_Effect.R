@@ -3,12 +3,26 @@
 ## Description:
 ##      This script holds the utility functions to run the stats to test the task conditions effect for the emotional stroop task analysis
 
+## Helper function to center log age for each population
+## It centers based on unique SID, not for each row
+## so participants with more/less rows (e.g., more/less correct trials)
+## are not down or up-weighted in mean log age calculation
+Center.Age <- function(d) {
+    d |> mutate(log_age = log(age) - mean(log(age[!duplicated(SID)])))
+}
 
+## Function for initial RT model and model assumptions
 Modelling.RT <- function(data) {
 
     dat <- read_rds(data) |>
                 ## Keeping only RT for correct trials
-                subset(correct == "correct") 
+                subset(correct == "correct") |>
+                    ## Centering log age for easier interpretation
+                    ## The intercept will now refer to an average-aged participant
+                    Center.Age()
+    
+    ## Set contrasts to sum-to-zero coding so that it matches mixed() output later
+    options(contrasts = c("contr.sum", "contr.poly"))
 
     ## Initial model
     model1 <- lmer(reaction_time ~ congruence * frequency * face_emotion + log_age + sex + ethnicity 
@@ -43,11 +57,11 @@ Modelling.RT <- function(data) {
         # model 1
         plot(fitted(model1), residuals(model1),
                 ylab = "Residuals", xlab = "Reaction Time (ms)",
-                main = "Residuals against observed RT (Initial model)")
+                main = "Residuals against fitted RT (Initial model)")
         # model 2
         plot(fitted(model2), residuals(model2),
                 ylab = "Residuals", xlab = "log-scored Reaction Time",
-                main = "Residuals against log-scored RT (log model)")
+                main = "Residuals against fitted log-scored RT (log model)")
         # normality residuals
         hist(residuals(model2), 
                 ylab = "Frequency", xlab = "Residuals",
@@ -60,30 +74,53 @@ Modelling.RT <- function(data) {
 }
 
 
+## Function for ANOVA part and effect size
 ANOVA.RT <- function(data) {
 
-    model <- Modelling.RT(data)
+    ## Calls function for initial model and assumptions
+    Modelling.RT(data)
 
-    my.anova <- anova(model)
-    my.ef <- eta_squared(my.anova, partial = TRUE) |> rename(term = Parameter)
-    
-    summary <- my.anova |> rownames_to_column("term") |> left_join(my.ef, by = "term")
+    ## Reformatting data for mixed() models like in Modelling.RT function
+    dat <- read_rds(data) |>
+                ## Keeping only RT for correct trials
+                subset(correct == "correct") |>
+                    ## Centering log age for easier interpretation
+                    ## The intercept will now refer to an average-aged participant
+                    Center.Age()
 
-    write.csv(summary, "./2-Task_Cond_Effect/Outputs/RT_Anova_results.csv")
+    ## Compute RT log-scores
+    dat$log_rt <- log(dat$reaction_time)
+
+    RT_Anova <- afex::mixed(log_rt ~ congruence * frequency * face_emotion + log_age + sex + ethnicity
+                     + (1 | SID), data = dat, method = "S")
+
+    my.ef <- effectsize::eta_squared(RT_Anova$full_model, partial = TRUE) |>
+                dplyr::rename(term = Parameter)
+
+    results_RT <- afex::nice(RT_Anova) |>
+                    dplyr::rename(term = Effect) |>
+                        dplyr::left_join(my.ef, by = "term")
+
+    write.csv(results_RT, "./2-Task_Cond_Effect/Outputs/RT_Anova_results.csv")
 }
 
 
-
+## Function for initial accuracy model and model assumptions
 Modelling.Accuracy <- function(data) {
 
-    dat <- read_rds(data)
-
-    dat <- dat |> 
+    dat <- read_rds(data) |>
                 mutate(correct = case_when(
                     correct == "correct"   ~ 1,
                     correct == "incorrect" ~ 0
-                ), .keep = "unused")
-    
+                ), .keep = "unused") |>
+                    ## Centering log age for easier interpretation
+                    ## The intercept will now refer to an average-aged participant
+                    Center.Age()
+
+    ## Set contrasts to sum-to-zero coding so that it matches mixed() output later
+    ## Age is centered in data prep
+    options(contrasts = c("contr.sum", "contr.poly"))
+
     ## random intercept only as random slope increases dispersion
     accuracy <- glmer(correct ~ congruence * frequency * face_emotion + log_age + sex + ethnicity
                     + (1 | SID),
@@ -126,68 +163,36 @@ Modelling.Accuracy <- function(data) {
 }
 
 
-ChiSq.Accuracy <- function(data) {
+## Function for Likelihood Ratio test part
+LRT.Accuracy <- function(data) {
 
-    model <- Modelling.Accuracy(data)
+    ## Calls function for initial model and assumptions
+    Modelling.Accuracy(data)
 
-    ## computes odds ratios and their CI
-    ## reports coefficient comparing a specific level to the reference level
-    OR_table <- tidy(model, effects = "fixed") |>
-                    mutate(
-                        OR = exp(estimate),
-                        OR_low = exp(estimate - 1.96 * std.error),
-                        OR_high = exp(estimate + 1.96 * std.error))
+    ## Reformatting data for mixed() models like in Modelling.Accuracy function
+    dat <- read_rds(data) |>
+                mutate(correct = case_when(
+                    correct == "correct"   ~ 1,
+                    correct == "incorrect" ~ 0
+                ), .keep = "unused") |>
+                    ## Centering log age for easier interpretation
+                    ## The intercept will now refer to an average-aged participant
+                    Center.Age()
 
-    write.csv(OR_table, "./2-Task_Cond_Effect/Outputs/Accuracy_OR_results.csv")
+    ## re-fit model with afex to get LRT
+    ## check_contrast = TRUE will do a sum-to-zero coding for each factor,
+    ## i.e., each factor's coefficients are deviations from the grand mean (e.g., congruent = +1, incongruent = -1)
+    ## rather than tratment coding (R default; e.g., congruent = 0, incongruent = 1)
+    ## However, it only affects factors, so we still need to center age (continuous variable)
+    accuracy_LRT <- afex::mixed(correct ~ congruence * frequency * face_emotion + log_age + sex + ethnicity
+                     + (1 | SID), family = binomial(), data = dat, check_contrasts = TRUE, method = "LRT")
 
-    ## Wald tests (χ² distribution)
-    ## tests that the tested coefficient is zero, given everything else in the model?
+    ## Likelihood ratio test chi square, one row per model term
+    ## Each test compares the full model against one with that term's column removed (Type 3)
+    ## A factor with 3+ levels gets a single omnibus test here, rather than several coefficient rows
+    print(accuracy_LRT)
+    write_rds(accuracy_LRT, "./2-Task_Cond_Effect/Outputs/Accuracy_LRT_results.rds")
 
-
-    ## tests overall effect of the factor
-    ## here we are doing a likelihood ratio test where we perform model comparison
-    ## on the full model vs alternative model which excludes each predictor
-    ## is is LR or chisquare or same thing?
-    ## Wald test that the relevant coefficients are jointly zero, given everything else in the model.
-    chisq_table <- car::Anova(model, type = 3) |>
-        as.data.frame() |>
-            tibble::rownames_to_column("term")    
-    
-    write.csv(chisq_table, "./2-Task_Cond_Effect/Outputs/Accuracy_ChiSq_results.csv")
+    result_accuracy <- afex::nice(accuracy_LRT)
+    write_csv(result_accuracy, "./2-Task_Cond_Effect/Outputs/Accuracy_LRT_results.csv")
 }
-
-
-## dat$var <- scale(dat$var) to center variables? only age?
-library(afex)
-accuracy_afex <- afex::mixed(correct ~ congruence * frequency * face_emotion + log_age + sex + ethnicity
-                     + (1 | SID), family = binomial(), data = dat, method = "LRT")
-
-## Wald z test
-## one row per coeff
-## uses dummy coding for contrasts, each coeff is a difference from the reference level
-summary(accuracy)
-## report result of accuracy_afex or summary(accuracy_afex) ?
-
-## LRT chi square
-## one row per model term
-## Each test compares the full model against one with that term’s columns removed (Type 3)
-## A factor with 3+ levels gets a single omnibus test here, rather than several coefficient rows.
-## this is the table we use for reporting
-accuracy_afex
-
-## Wald z test, not LRT!!
-## summary of accuracy_afex$full_model
-## but refits the model with sum to zero contrasts
-## Each coefficient is a deviation from the grand mean (e.g., congruence1, not congruenceIncongruent)
-summary(accuracy_afex)
-
-
-
-## to do:
-##      still ORs or not needed? OR for RT too?
-##      get rid of car::Anova and implement afex::mixed for accuracy
-##      afex:mixed for RT too?
-##      can save output as csv?
-##      contrasts?
-##      scaling (centering) of variables? Age only?
-##      coefficients RT?

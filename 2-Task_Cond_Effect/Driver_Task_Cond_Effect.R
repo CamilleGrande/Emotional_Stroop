@@ -6,12 +6,17 @@
 
 ## To do:
 ##    Influential points for loop
+##    test percentage accuracy
+##      still ORs or not needed? OR for RT too?
+##      coefficients RT?
 
 library(tidyverse)
 library(lmerTest)
 library(effectsize)
 library(DHARMa)
 library(performance)
+library(broom.mixed)
+library(afex)
 
 
 source("./2-Task_Cond_Effect/Utilities_Task_Cond_Effect.R")
@@ -19,4 +24,4 @@ source("./2-Task_Cond_Effect/Utilities_Task_Cond_Effect.R")
 data.all = "./0-Data_Prep/Outputs/Tidy_all.rds"
 
 ANOVA.RT(data.all)
-ChiSq.Accuracy(data.all)
+LRT.Accuracy(data.all)
