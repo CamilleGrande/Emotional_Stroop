@@ -12,6 +12,8 @@
     library(effectsize)
     library(DHARMa)
     library(performance)
+    library(broom.mixed)
+    library(afex)
 
 ## Utility script
     source("./3-Cognitive_Factors_Effect/Utilities_CFA.R")
@@ -29,4 +31,4 @@
 
 ## Modelling RT and Accuracy with factors from CFA
     ANOVA.RT(EST.data, FactorAnalysis.output)
-    ChiSq.Accuracy(EST.data, FactorAnalysis.output)
+    LRT.Accuracy(EST.data, FactorAnalysis.output)
