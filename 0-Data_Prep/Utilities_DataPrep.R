@@ -66,9 +66,6 @@ Tidy.Data <- function(data.EST, data.demog) {
                     mutate(
                         SID = subject_id,
                         age = as.numeric(age_enrolment),
-                        ## Centering log age for easier interpretation
-                        ## The intercept will now refer to an average-aged participant
-                        log_age = log(age) - mean(log(age)),
                         sex = as.factor(assigned_sex_at_birth),
                         gender_diversity = as.factor(gender_diversity),
                         ethnicity = as.factor(ethnicity),
@@ -271,9 +268,14 @@ Tidy.CSSRS <- function(filename) {
                     rename(SID = "subject_id") |>
                             distinct(SID, .keep_all = T) |>
                                 arrange(SID) |>
-                                    select(all_of(c("SID", "cssrs_attempt_lt"))) |>
-                                        mutate(cssrs_attempt_lt = as.integer(cssrs_attempt_lt), .keep = "unused")
+                                    select(all_of(c("SID", "cssrs_attempt_lt")))
+    
+    ## get rid of one participant with "INV" data
+    suicide <- subset(suicide, suicide$cssrs_attempt_lt != "INV")
 
+    suicide <- suicide |>
+                mutate(cssrs_attempt_lt = as.factor(cssrs_attempt_lt), .keep = "unused")
+    
     ## Participants with no missing data:
     suicide |>
         drop_na() |>
