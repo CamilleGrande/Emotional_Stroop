@@ -20,6 +20,31 @@ Create.Summary.Models <- function(list.models) {
 }
 
 
+## Helper function to center log age for each population
+## It centers based on unique SID, not for each row
+## so participants with more/less rows (e.g., more/less correct trials)
+## are not down or up-weighted in mean log age calculation
+Center.Age <- function(d) {
+    d |> mutate(log_age = log(age) - mean(log(age[!duplicated(SID)])))
+}
+
+
+## Centers clinical scales at the participant level (one value per SID)
+## like with age
+Center.Clinical <- function(d) {
+
+    clinical_vars <- c("anxdepr_t", "withdrdepr_t", "somatic_t", "thought_t",
+                   "attention_t", "aggressive_t", "rulebreaking_t")
+
+    means <- d |>
+        distinct(SID, across(all_of(clinical_vars))) |>
+        summarise(across(all_of(clinical_vars), \(x) mean(x, na.rm = TRUE)))
+
+    d |>
+        mutate(across(all_of(clinical_vars), \(x) x - means[[cur_column()]]))
+}
+
+
 ## Runs the analysis for the models on interference effect, face emotion effect
 ## and their interaction for RT
 Interference.FaceEmotion.RT <- function(EST.data, clinical.data, suicide.data) {
@@ -34,19 +59,32 @@ Interference.FaceEmotion.RT <- function(EST.data, clinical.data, suicide.data) {
 
     suicide <- read_rds(suicide.data)
 
+    ## Set contrasts to sum-to-zero coding so that it matches mixed() output later
+    ## Age is centered in data prep
+    options(contrasts = c("contr.sum", "contr.poly"))
+
     ## ----- Suicide analysis -----
     ## don't bind all 3 (EST, clinical, suicide) together bc would loose a lot of suicide data
     ## EST + clinical: n = 690
     ## EST + suicide: n = 640
     ## ptcp w EST + clinical + suicide data: n = 616
-    dat_suicide <- inner_join(EST, suicide, by = "SID")
+    dat_suicide <- inner_join(EST, suicide, by = "SID") |>
+                        ## Centering log age for easier interpretation
+                        ## The intercept will now refer to an average-aged participant
+                        Center.Age()
 
     model_suicide <- lmer(log_rt ~ congruence * face_emotion * cssrs_attempt_lt + log_age + sex + ethnicity 
                     + (1 | SID),
                     data = dat_suicide, REML = T)
 
     ## ----- Clinical sympt analysis -----
-    dat_clinical <- inner_join(EST, clinical, by = "SID")
+    dat_clinical <- inner_join(EST, clinical, by = "SID") |>
+                        ## Centering log age for easier interpretation
+                        ## The intercept will now refer to an average-aged participant
+                        Center.Age() |>
+                            ## Centering clinical scales for easier interpretation based on the sample mean
+                            ## Negative values = low t-score; positive values = high t-score
+                            Center.Clinical()
 
     model_anxdepr <- lmer(log_rt ~ congruence * face_emotion * anxdepr_t + log_age + sex + ethnicity 
                     + (1 | SID),
@@ -96,29 +134,42 @@ Interference.FaceEmotion.RT <- function(EST.data, clinical.data, suicide.data) {
 ## and their interaction for accuracy
 Interference.FaceEmotion.Accuracy <- function(EST.data, clinical.data, suicide.data) {
 
-    EST <- read_rds(EST.data) |> 
-                mutate(correct = case_when(
-                    correct == "correct"   ~ 1,
-                    correct == "incorrect" ~ 0
-                ), .keep = "unused")
+    EST <- read_rds(EST.data) |>
+                    mutate(correct = case_when(
+                        correct == "correct"   ~ 1,
+                        correct == "incorrect" ~ 0
+                    ), .keep = "unused")
 
     clinical <- read_rds(clinical.data)
 
     suicide <- read_rds(suicide.data)
+
+    ## Set contrasts to sum-to-zero coding so that it matches mixed() output later
+    ## Age is centered in data prep
+    options(contrasts = c("contr.sum", "contr.poly"))
 
     ## ----- Suicide analysis -----
     ## don't bind all 3 (EST, clinical, suicide) together bc would loose a lot of suicide data
     ## EST + clinical: n = 690
     ## EST + suicide: n = 640
     ## ptcp w EST + clinical + suicide data: n = 616
-    dat_suicide <- inner_join(EST, suicide, by = "SID")
+    dat_suicide <- inner_join(EST, suicide, by = "SID") |>
+                        ## Centering log age for easier interpretation
+                        ## The intercept will now refer to an average-aged participant
+                        Center.Age()
     
     model_suicide <- glmer(correct ~ congruence * face_emotion * cssrs_attempt_lt + log_age + sex + ethnicity
                     + (1 | SID),
                     data = dat_suicide, family = binomial(link = "logit"))
     
     ## ----- Clinical sympt analysis -----
-    dat_clinical <- inner_join(EST, clinical, by = "SID")
+    dat_clinical <- inner_join(EST, clinical, by = "SID") |>
+                        ## Centering log age for easier interpretation
+                        ## The intercept will now refer to an average-aged participant
+                        Center.Age() |>
+                            ## Centering clinical scales for easier interpretation based on the sample mean
+                            ## Negative values = low t-score; positive values = high t-score
+                            Center.Clinical()
 
     model_anxdepr <- glmer(correct ~ congruence * face_emotion * anxdepr_t + log_age + sex + ethnicity
                     + (1 | SID),
@@ -169,30 +220,43 @@ Interference.FaceEmotion.Accuracy <- function(EST.data, clinical.data, suicide.d
 Congruent.RT <- function(EST.data, clinical.data, suicide.data) {
 
     EST <- read_rds(EST.data) |>
-                ## Keeping only congruent trials
-                subset(congruence == "congruent") |>
-                    ## Keeping only RT for correct trials
-                    subset(correct == "correct") 
-    
+                    ## Keeping only congruent trials
+                    subset(congruence == "congruent") |>
+                        ## Keeping only RT for correct trials
+                        subset(correct == "correct") 
+
     EST$log_rt <- log(EST$reaction_time)
     
     clinical <- read_rds(clinical.data)
 
     suicide <- read_rds(suicide.data)
 
+    ## Set contrasts to sum-to-zero coding so that it matches mixed() output later
+    ## Age is centered in data prep
+    options(contrasts = c("contr.sum", "contr.poly"))
+
     ## ----- Suicide analysis -----
     ## don't bind all 3 (EST, clinical, suicide) together bc would loose a lot of suicide data
     ## EST + clinical: n = 690
     ## EST + suicide: n = 640
     ## ptcp w EST + clinical + suicide data: n = 616
-    dat_suicide <- inner_join(EST, suicide, by = "SID")
+    dat_suicide <- inner_join(EST, suicide, by = "SID") |>
+                        ## Centering log age for easier interpretation
+                        ## The intercept will now refer to an average-aged participant
+                        Center.Age()
 
     model_suicide <- lmer(log_rt ~ cssrs_attempt_lt + log_age + sex + ethnicity 
                     + (1 | SID),
                     data = dat_suicide, REML = T)
 
     ## ----- Clinical sympt analysis -----
-    dat_clinical <- inner_join(EST, clinical, by = "SID")
+    dat_clinical <- inner_join(EST, clinical, by = "SID") |>
+                        ## Centering log age for easier interpretation
+                        ## The intercept will now refer to an average-aged participant
+                        Center.Age() |>
+                            ## Centering clinical scales for easier interpretation based on the sample mean
+                            ## Negative values = low t-score; positive values = high t-score
+                            Center.Clinical()
 
     model_anxdepr <- lmer(log_rt ~ anxdepr_t + log_age + sex + ethnicity 
                     + (1 | SID),
@@ -242,31 +306,44 @@ Congruent.RT <- function(EST.data, clinical.data, suicide.data) {
 ## for Accuracy
 Congruent.Accuracy <- function(EST.data, clinical.data, suicide.data) {
 
-    EST <- read_rds(EST.data) |> 
-                ## Keeping only congruent trials
-                subset(congruence == "congruent") |>
-                    mutate(correct = case_when(
-                        correct == "correct"   ~ 1,
-                        correct == "incorrect" ~ 0
-                    ), .keep = "unused")
+    EST <- read_rds(EST.data) |>
+                    ## Keeping only congruent trials
+                    subset(congruence == "congruent") |>
+                        mutate(correct = case_when(
+                            correct == "correct"   ~ 1,
+                            correct == "incorrect" ~ 0
+                        ), .keep = "unused")
 
     clinical <- read_rds(clinical.data)
 
     suicide <- read_rds(suicide.data)
+
+    ## Set contrasts to sum-to-zero coding so that it matches mixed() output later
+    ## Age is centered in data prep
+    options(contrasts = c("contr.sum", "contr.poly"))
 
     ## ----- Suicide analysis -----
     ## don't bind all 3 (EST, clinical, suicide) together bc would loose a lot of suicide data
     ## EST + clinical: n = 690
     ## EST + suicide: n = 640
     ## ptcp w EST + clinical + suicide data: n = 616
-    dat_suicide <- inner_join(EST, suicide, by = "SID")
+    dat_suicide <- inner_join(EST, suicide, by = "SID") |>
+                        ## Centering log age for easier interpretation
+                        ## The intercept will now refer to an average-aged participant
+                        Center.Age()
     
     model_suicide <- glmer(correct ~ cssrs_attempt_lt + log_age + sex + ethnicity
                     + (1 | SID),
                     data = dat_suicide, family = binomial(link = "logit"))
     
     ## ----- Clinical sympt analysis -----
-    dat_clinical <- inner_join(EST, clinical, by = "SID")
+    dat_clinical <- inner_join(EST, clinical, by = "SID") |>
+                        ## Centering log age for easier interpretation
+                        ## The intercept will now refer to an average-aged participant
+                        Center.Age() |>
+                            ## Centering clinical scales for easier interpretation based on the sample mean
+                            ## Negative values = low t-score; positive values = high t-score
+                            Center.Clinical()
 
     model_anxdepr <- glmer(correct ~ anxdepr_t + log_age + sex + ethnicity
                     + (1 | SID),
