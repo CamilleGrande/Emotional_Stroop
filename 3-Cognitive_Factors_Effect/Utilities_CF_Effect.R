@@ -138,6 +138,99 @@ ANOVA.RT <- function(data, cog.data) {
 }
 
 
+## This function computes the confidence intervals for our ratios
+## to get CI for percent faster/slower RT
+Compute.CI <- function(my.emm, label) {
+
+    ## get the CI on the contrasts
+    ci <- as.data.frame(confint(my.emm$contrasts))
+    lcl <- grep("LCL|lower.CL", names(ci), value = TRUE)
+    ucl <- grep("UCL|upper.CL", names(ci), value = TRUE)
+
+    ci$analysis <- label
+    ## negative = faster
+    ci$pct_change <- 100 * (ci$ratio - 1)
+    ## order preserved, no flip as ratio - 1 is an increasing function
+    ## before had 1 - ratio, which is a decreasing function so had to reverse lcl as uci and ucl as lci
+    ci$pct_lo <- 100 * (ci[[lcl]] - 1)
+    ci$pct_hi <- 100 * (ci[[ucl]] - 1)
+    
+    clean_ci <- ci[, setdiff(names(ci), c("SE", "df", "null", "z.ratio", "p.value", lcl, ucl, "ratio"))]
+    return(clean_ci)
+}
+
+
+Percent.Change.RT <- function(model) {
+
+    ## Model already fitted
+    RT_perf <- read_rds(model)
+
+    emm_options(lmer.df = "asymptotic")
+
+    ## all the comparisons we want to test
+    specs <- c(
+        "f1",
+        "f2",
+        "f3"
+        "congruence",
+        "frequency",
+        "face_emotion",
+        "congruence | frequency",
+        "congruence | face_emotion",
+        "face_emotion | frequency",
+        "congruence | frequency * face_emotion",
+        "sex",
+        "ethnicity"
+    )
+
+    ## one list with all comparisons and CIs
+    res <- lapply(specs, function(s) {
+        emm <- emmeans(RT_perf, as.formula(paste("pairwise ~", s)),
+                      tran = "log", type = "response")
+        Compute.CI(emm, label = s)
+    })
+
+    ## For age, % change in RT per doubling of age (assumes log_age = natural log)
+    b  <- unname(fixef(RT_perf)["log_age"])
+    ci <- confint(RT_perf, parm = "log_age", method = "Wald")
+    res_age <- data.frame(
+        analysis   = "age",
+        contrast   = "doubling of age",
+        pct_change = 100 * (2^b - 1),
+        pct_lo     = 100 * (2^ci[1, 1] - 1),
+        pct_hi     = 100 * (2^ci[1, 2] - 1)
+    )
+
+    ## For cognition, % change per 1SD change in factor score
+    cog_vars <- c("f1", "f2", "f3")
+
+    ## To compute SD, we use SD across participants, not across trials
+    ## bc otherise would get weighted by nb of trials each ptcp has
+    mf   <- model.frame(RT_perf)
+    subj <- mf[!duplicated(mf$SID), ]
+
+    est <- fixef(RT_perf)
+    ci_cog <- confint(RT_perf, parm = cog_vars, method = "Wald")
+
+    res_cog <- do.call(rbind, lapply(cog_vars, function(v) {
+        sd_v <- sd(subj[[v]])
+        b    <- unname(est[v])
+        lo   <- ci_cog[v, 1]
+        hi   <- ci_cog[v, 2]
+        data.frame(
+            analysis   = v,
+            contrast   = c("per 1 unit", "per 1 SD"),
+            pct_change = 100 * (exp(c(b,  b  * sd_v)) - 1),
+            pct_lo     = 100 * (exp(c(lo, lo * sd_v)) - 1),
+            pct_hi     = 100 * (exp(c(hi, hi * sd_v)) - 1)
+        )
+    }))
+
+    all_res <- dplyr::bind_rows(c(res, list(res_age, res_cog)))
+    write_csv(all_res, "./3-Cognitive_Factors_Effect/Outputs/RT_Percent_Change.csv")
+    return(all_res)
+}
+
 
 Modelling.Accuracy <- function(EST.data, cog.data) {
 

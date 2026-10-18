@@ -23,6 +23,7 @@
     EST.data = "./0-Data_Prep/Outputs/Tidy_all.rds"
     cognition.data = "./0-Data_Prep/Outputs/Tidy_cognition.rds"
     FactorAnalysis.output = "./3-Cognitive_Factors_Effect/Outputs/Factor_Scores.csv"
+    rt.model = "./3-Cognitive_Factors_Effect/Outputs/RT_Final_Model_results.rds"
 
 
 ## Confirmatory Factor Analysis on whole sample
@@ -31,4 +32,5 @@
 
 ## Modelling RT and Accuracy with factors from CFA
     ANOVA.RT(EST.data, FactorAnalysis.output)
+    Percent.Change.RT(rt.model)
     LRT.Accuracy(EST.data, FactorAnalysis.output)
