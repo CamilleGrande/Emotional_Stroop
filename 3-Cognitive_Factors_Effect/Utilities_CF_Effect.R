@@ -64,7 +64,7 @@ Modelling.RT <- function(EST.data, cog.data) {
                     + (1 | SID),
                     data = dat, REML = T)
     
-    write_rds(model2, "./3-Cognitive_Factors_Effect/Outputs/RT_Final_Model_results.rds")
+    write_rds(model2, "./3-Cognitive_Factors_Effect/Outputs/RT_Model_results.rds")
 
 
     ## Residuals are linearly distributed (similar deviations)
@@ -169,9 +169,6 @@ Percent.Change.RT <- function(model) {
 
     ## all the comparisons we want to test
     specs <- c(
-        "f1",
-        "f2",
-        "f3"
         "congruence",
         "frequency",
         "face_emotion",
@@ -185,8 +182,10 @@ Percent.Change.RT <- function(model) {
 
     ## one list with all comparisons and CIs
     res <- lapply(specs, function(s) {
-        emm <- emmeans(RT_perf, as.formula(paste("pairwise ~", s)),
-                      tran = "log", type = "response")
+        ## revpairwise gives incongruent / congruent (positive = slower for incongruent)
+        contr <- if (grepl("^congruence", s)) "revpairwise" else "pairwise"
+        emm <- emmeans(RT_perf, as.formula(paste(contr, "~", s)),
+                    tran = "log", type = "response")
         Compute.CI(emm, label = s)
     })
 
@@ -339,4 +338,88 @@ LRT.Accuracy <- function(data, cog.data) {
 
     result_accuracy <- afex::nice(accuracy_LRT)
     write_csv(result_accuracy, "./3-Cognitive_Factors_Effect/Outputs/Accuracy_LRT_results.csv")
+}
+
+
+
+## Computes odds ratios + CIs from emmeans contrasts (binomial GLMM)
+Compute.OR <- function(my.emm, label) {
+
+    ci  <- as.data.frame(confint(my.emm$contrasts))
+    lcl <- grep("LCL|lower.CL", names(ci), value = TRUE)
+    ucl <- grep("UCL|upper.CL", names(ci), value = TRUE)
+
+    ci$analysis <- label
+    ci$OR       <- ci$odds.ratio
+    ci$OR_lo    <- ci[[lcl]]
+    ci$OR_hi    <- ci[[ucl]]
+
+    return(ci[, setdiff(names(ci), c("SE", "df", "null", "z.ratio", "p.value", "odds.ratio", lcl, ucl))])
+}
+
+
+Odds.Ratio.Acc <- function(model) {
+
+    ## Model already fitted
+    acc_perf <- read_rds(model)
+
+    specs <- c(
+        "congruence",
+        "frequency",
+        "face_emotion",
+        "congruence | frequency",
+        "congruence | face_emotion",
+        "face_emotion | frequency",
+        "congruence | frequency * face_emotion",
+        "sex",
+        "ethnicity"
+    )
+
+    res <- lapply(specs, function(s) {
+        ## pairwise gives congruent / incongruent (OR > 1 = more accurate when congruent)
+        ## use "revpairwise" instead if you want incongruent / congruent, like in the RT script
+        ## no tran = "log": emmeans already knows the logit link
+        emm <- emmeans(acc_perf, as.formula(paste("pairwise ~", s)),
+                       type = "response")
+        Compute.OR(emm, label = s)
+    })
+
+    ## Age: OR per doubling of age (assumes log_age = natural log)
+    b  <- unname(fixef(acc_perf)["log_age"])
+    ci <- confint(acc_perf, parm = "log_age", method = "Wald")
+    res_age <- data.frame(
+        analysis = "age",
+        contrast = "doubling of age",
+        OR       = 2^b,
+        OR_lo    = 2^ci[1, 1],
+        OR_hi    = 2^ci[1, 2]
+    )
+
+    ## Cognition: OR per 1 unit and per 1 SD of factor score
+    cog_vars <- c("f1", "f2", "f3")
+
+    ## SD across participants, not trials (same logic as the RT script)
+    mf   <- model.frame(acc_perf)
+    subj <- mf[!duplicated(mf$SID), ]
+
+    est    <- fixef(acc_perf)
+    ci_cog <- confint(acc_perf, parm = cog_vars, method = "Wald")
+
+    res_cog <- do.call(rbind, lapply(cog_vars, function(v) {
+        sd_v <- sd(subj[[v]])
+        b    <- unname(est[v])
+        lo   <- ci_cog[v, 1]
+        hi   <- ci_cog[v, 2]
+        data.frame(
+            analysis = v,
+            contrast = c("per 1 unit", "per 1 SD"),
+            OR = exp(c(b,  b  * sd_v)),
+            OR_lo = exp(c(lo, lo * sd_v)),
+            OR_hi = exp(c(hi, hi * sd_v))
+        )
+    }))
+
+    all_res <- bind_rows(c(res, list(res_age, res_cog)))
+    write_csv(all_res, "./3-Cognitive_Factors_Effect/Outputs/Accuracy_Odds_Ratios.csv")
+    return(all_res)
 }
