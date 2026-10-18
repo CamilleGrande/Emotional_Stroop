@@ -8,12 +8,11 @@
 ## Libraries needed to run the script
     library(tidyverse)
     library(lavaan)
-    library(lmerTest)
-    library(effectsize)
+    library(lme4)
     library(DHARMa)
     library(performance)
-    library(broom.mixed)
-    library(afex)
+    library(emmeans)
+    library(ggeffects)
 
 ## Utility script
     source("./3-Cognitive_Factors_Effect/Utilities_CFA.R")
@@ -23,7 +22,8 @@
     EST.data = "./0-Data_Prep/Outputs/Tidy_all.rds"
     cognition.data = "./0-Data_Prep/Outputs/Tidy_cognition.rds"
     FactorAnalysis.output = "./3-Cognitive_Factors_Effect/Outputs/Factor_Scores.csv"
-    rt.model = "./3-Cognitive_Factors_Effect/Outputs/RT_Final_Model_results.rds"
+    model.rt = "./3-Cognitive_Factors_Effect/Outputs/RT_Model_results.rds"
+    model.acc = "./3-Cognitive_Factors_Effect/Outputs/Accuracy_Model_results.rds"
 
 
 ## Confirmatory Factor Analysis on whole sample
@@ -32,5 +32,6 @@
 
 ## Modelling RT and Accuracy with factors from CFA
     ANOVA.RT(EST.data, FactorAnalysis.output)
-    Percent.Change.RT(rt.model)
+    Percent.Change.RT(model.rt)
     LRT.Accuracy(EST.data, FactorAnalysis.output)
+    Odds.Ratio.Acc(model.acc)
