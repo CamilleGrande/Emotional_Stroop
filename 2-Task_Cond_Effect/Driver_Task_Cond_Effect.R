@@ -17,11 +17,16 @@ library(DHARMa)
 library(performance)
 library(broom.mixed)
 library(afex)
+library(paletteer)
+## might need lme4
 
 
 source("./2-Task_Cond_Effect/Utilities_Task_Cond_Effect.R")
 
 data.all = "./0-Data_Prep/Outputs/Tidy_all.rds"
+## These files will get created when running this script
+model.rt = "./2-Task_Cond_Effect/Outputs/RT_Final_Model_results.rds"
 
 ANOVA.RT(data.all)
+Percent.Change.RT(model.rt)
 LRT.Accuracy(data.all)

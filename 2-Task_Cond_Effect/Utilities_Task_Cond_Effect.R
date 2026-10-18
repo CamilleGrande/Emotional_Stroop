@@ -78,7 +78,7 @@ Modelling.RT <- function(data) {
 ANOVA.RT <- function(data) {
 
     ## Calls function for initial model and assumptions
-    Modelling.RT(data)
+    my.model <- Modelling.RT(data)
 
     ## Reformatting data for mixed() models like in Modelling.RT function
     dat <- read_rds(data) |>
@@ -102,6 +102,147 @@ ANOVA.RT <- function(data) {
                         dplyr::left_join(my.ef, by = "term")
 
     write.csv(results_RT, "./2-Task_Cond_Effect/Outputs/RT_Anova_results.csv")
+
+    ## Plotting
+    data_plot <- read_rds(data)
+    Plots.RT(my.model, data_plot)
+}
+
+
+Plots.RT <- function(model, EST.data) {
+
+    ## ---- Plot three way interaction ----
+    ## Fetch our model (saved it so no need to re run analysis for plotting)
+    RT_perf <- read_rds(model)
+
+    ## Plot three way interaction
+    emm <- emmeans(RT_perf, ~ congruence * frequency * face_emotion)
+    ## Save as df for plotting, otherwise won't work
+    emm_df <- as.data.frame(emm)
+
+    ## Exponentiate coefficients as are on the log scale (log RT)
+    emm_df$RT_ms <- exp(emm_df$emmean)
+    ## Lower and Upper CI
+    emm_df$lower_ms <- exp(emm_df$asymp.LCL)
+    emm_df$upper_ms <- exp(emm_df$asymp.UCL)
+
+    pdf("./2-Task_Cond_Effect/Outputs/RT_Three_way_interaction.pdf")
+        ggplot(emm_df, aes(
+                    x = congruence,
+                    y = RT_ms,
+                    color = frequency,
+                    group = frequency
+                )) +
+                geom_point(size = 4) +
+                scale_y_continuous(breaks = seq(800, 1000, by = 25)) +
+                geom_line(linewidth = 1) +
+                geom_errorbar(aes(ymin = lower_ms, ymax = upper_ms), linewidth = 1, width = .1) +
+                facet_wrap(~ face_emotion) +
+                ylab("Predicted RT (ms)") +
+                labs(color = "Frequency") +
+                theme_classic() +
+                theme(axis.text = element_text(size = 12),
+                        axis.title = element_text(size = 14, face = "bold"),
+                        strip.text.x = element_text(size = 12),
+                        legend.text = element_text(size = 12)) +
+                scale_color_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More frequent"))
+    dev.off()
+
+
+    ## ---- Plot predicted RT for age ----
+    EST <- read_rds(EST.data)
+
+    ## Get predicted values for log age from our model
+    pred_age <- ggpredict(RT_perf, terms = "log_age [all]")
+
+    ## Predicted age from log centered age in our model
+    pred_age$age <- exp(pred_age$x + mean(log(EST$age)))
+
+    ## Exponentiate coefficients as are on the log scale (log RT)
+    pred_age$RT_ms <- exp(pred_age$predicted)
+    pred_age$lower_ms <- exp(pred_age$conf.low)
+    pred_age$upper_ms <- exp(pred_age$conf.high)
+
+    pdf("./2-Task_Cond_Effect/Outputs/RT_Age.pdf")
+        ggplot(pred_age, aes(age, RT_ms)) +
+            geom_line() +
+            geom_ribbon(
+                aes(ymin = lower_ms,
+                    ymax = upper_ms),
+                alpha = .2
+            ) +
+            labs(
+                x = "Age (years)",
+                y = "Predicted RT (ms)"
+            ) +
+            theme_classic()
+    dev.off()
+}
+
+
+## This function computes the confidence intervals for our ratios
+## to get CI for percent faster/slower RT
+Compute.CI <- function(my.emm, label) {
+
+    ## get the CI on the contrasts
+    ci <- as.data.frame(confint(my.emm$contrasts))
+    lcl <- grep("LCL|lower.CL", names(ci), value = TRUE)
+    ucl <- grep("UCL|upper.CL", names(ci), value = TRUE)
+
+    ci$analysis <- label
+    ## negative = faster
+    ci$pct_change <- 100 * (ci$ratio - 1)
+    ## order preserved, no flip as ratio - 1 is an increasing function
+    ## before had 1 - ratio, which is a decreasing function so had to reverse lcl as uci and ucl as lci
+    ci$pct_lo <- 100 * (ci[[lcl]] - 1)
+    ci$pct_hi <- 100 * (ci[[ucl]] - 1)
+    
+    clean_ci <- ci[, setdiff(names(ci), c("SE", "df", "null", "z.ratio", "p.value", lcl, ucl, "ratio"))]
+    return(clean_ci)
+}
+
+
+Percent.Change.RT <- function(model) {
+
+    ## Model already fitted
+    RT_perf <- read_rds(model)
+
+    emm_options(lmer.df = "asymptotic")
+
+    ## all the comparisons we want to test
+    specs <- c(
+        "congruence",
+        "frequency",
+        "face_emotion",
+        "congruence | frequency",
+        "congruence | face_emotion",
+        "face_emotion | frequency",
+        "congruence | frequency * face_emotion",
+        "sex",
+        "ethnicity"
+    )
+
+    ## one list with all comparisons and CIs
+    res <- lapply(specs, function(s) {
+        emm <- emmeans(RT_perf, as.formula(paste("pairwise ~", s)),
+                      tran = "log", type = "response")
+        Compute.CI(emm, label = s)
+    })
+
+    ## For age, % change in RT per doubling of age (assumes log_age = natural log)
+    b  <- unname(fixef(RT_perf)["log_age"])
+    ci <- confint(RT_perf, parm = "log_age", method = "Wald")
+    res_age <- data.frame(
+        analysis   = "age",
+        contrast   = "doubling of age",
+        pct_change = 100 * (2^b - 1),
+        pct_lo     = 100 * (2^ci[1, 1] - 1),
+        pct_hi     = 100 * (2^ci[1, 2] - 1)
+    )
+
+    all_res <- dplyr::bind_rows(c(res, list(res_age)))
+    write_csv(all_res, "./2-Task_Cond_Effect/Outputs/RT_Percent_Change.csv")
+    return(all_res)
 }
 
 
