@@ -6,27 +6,27 @@
 
 ## To do:
 ##    Influential points for loop
-##    test percentage accuracy
-##      still ORs or not needed? OR for RT too?
-##      coefficients RT?
 
-library(tidyverse)
-library(lmerTest)
-library(effectsize)
-library(DHARMa)
-library(performance)
-library(broom.mixed)
-library(afex)
-library(paletteer)
-## might need lme4
+## Libraries needed to run the script
+    library(tidyverse)
+    library(lme4)
+    library(DHARMa)
+    library(performance)
+    library(emmeans)
+    library(ggeffects)
 
+## Utility script
+    source("./2-Task_Cond_Effect/Utilities_Task_Cond_Effect.R")
 
-source("./2-Task_Cond_Effect/Utilities_Task_Cond_Effect.R")
-
-data.all = "./0-Data_Prep/Outputs/Tidy_all.rds"
-## These files will get created when running this script
-model.rt = "./2-Task_Cond_Effect/Outputs/RT_Final_Model_results.rds"
+## Paths
+    data.all = "./0-Data_Prep/Outputs/Tidy_all.rds"
+    ## These files will get created when running this script
+    model.rt = "./2-Task_Cond_Effect/Outputs/RT_Model_results.rds"
+    model.acc = "./2-Task_Cond_Effect/Outputs/Accuracy_Model_results.rds"
 
 ANOVA.RT(data.all)
 Percent.Change.RT(model.rt)
+Plots.RT(model.rt, data.all)
 LRT.Accuracy(data.all)
+Odds.Ratio.Acc(model.acc)
+Plots.Accuracy(model.acc)

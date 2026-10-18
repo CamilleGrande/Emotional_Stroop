@@ -39,7 +39,7 @@ Modelling.RT <- function(data) {
                     + (1 | SID),
                     data = dat, REML = T)
 
-    write_rds(model2, "./2-Task_Cond_Effect/Outputs/RT_Final_Model_results.rds")
+    write_rds(model2, "./2-Task_Cond_Effect/Outputs/RT_Model_results.rds")
 
 
     ## Residuals are linearly distributed (similar deviations)
@@ -75,13 +75,13 @@ Modelling.RT <- function(data) {
 
 
 ## Function for ANOVA part and effect size
-ANOVA.RT <- function(data) {
+ANOVA.RT <- function(my.data) {
 
     ## Calls function for initial model and assumptions
-    my.model <- Modelling.RT(data)
+    my.model <- Modelling.RT(my.data)
 
     ## Reformatting data for mixed() models like in Modelling.RT function
-    dat <- read_rds(data) |>
+    dat <- read_rds(my.data) |>
                 ## Keeping only RT for correct trials
                 subset(correct == "correct") |>
                     ## Centering log age for easier interpretation
@@ -102,14 +102,13 @@ ANOVA.RT <- function(data) {
                         dplyr::left_join(my.ef, by = "term")
 
     write.csv(results_RT, "./2-Task_Cond_Effect/Outputs/RT_Anova_results.csv")
-
-    ## Plotting
-    data_plot <- read_rds(data)
-    Plots.RT(my.model, data_plot)
 }
 
 
+## This function plots RTs for the three way interaction and age
 Plots.RT <- function(model, EST.data) {
+
+    emm_options(lmer.df = "asymptotic")
 
     ## ---- Plot three way interaction ----
     ## Fetch our model (saved it so no need to re run analysis for plotting)
@@ -126,8 +125,7 @@ Plots.RT <- function(model, EST.data) {
     emm_df$lower_ms <- exp(emm_df$asymp.LCL)
     emm_df$upper_ms <- exp(emm_df$asymp.UCL)
 
-    pdf("./2-Task_Cond_Effect/Outputs/RT_Three_way_interaction.pdf")
-        ggplot(emm_df, aes(
+    three_way_plot <- ggplot(emm_df, aes(
                     x = congruence,
                     y = RT_ms,
                     color = frequency,
@@ -146,25 +144,29 @@ Plots.RT <- function(model, EST.data) {
                         strip.text.x = element_text(size = 12),
                         legend.text = element_text(size = 12)) +
                 scale_color_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More frequent"))
-    dev.off()
+   
+    ggsave("./2-Task_Cond_Effect/Outputs/RT_Three_way_interaction.pdf", three_way_plot, width = 8, height = 5)
 
 
     ## ---- Plot predicted RT for age ----
-    EST <- read_rds(EST.data)
+    EST <- read_rds(EST.data) |> 
+            subset(correct == "correct")
+
+    ## Same centering constant as Center.Age() used when fitting the model
+    age_center <- mean(log(EST$age[!duplicated(EST$SID)]))
 
     ## Get predicted values for log age from our model
     pred_age <- ggpredict(RT_perf, terms = "log_age [all]")
 
-    ## Predicted age from log centered age in our model
-    pred_age$age <- exp(pred_age$x + mean(log(EST$age)))
+    ## Back-transform centered log age to age in years
+    pred_age$age <- exp(pred_age$x + age_center)
 
     ## Exponentiate coefficients as are on the log scale (log RT)
     pred_age$RT_ms <- exp(pred_age$predicted)
     pred_age$lower_ms <- exp(pred_age$conf.low)
     pred_age$upper_ms <- exp(pred_age$conf.high)
 
-    pdf("./2-Task_Cond_Effect/Outputs/RT_Age.pdf")
-        ggplot(pred_age, aes(age, RT_ms)) +
+    age_plot <- ggplot(pred_age, aes(age, RT_ms)) +
             geom_line() +
             geom_ribbon(
                 aes(ymin = lower_ms,
@@ -176,7 +178,8 @@ Plots.RT <- function(model, EST.data) {
                 y = "Predicted RT (ms)"
             ) +
             theme_classic()
-    dev.off()
+    
+    ggsave("./2-Task_Cond_Effect/Outputs/RT_Age.pdf", age_plot, width = 8, height = 5)
 }
 
 
@@ -224,8 +227,10 @@ Percent.Change.RT <- function(model) {
 
     ## one list with all comparisons and CIs
     res <- lapply(specs, function(s) {
-        emm <- emmeans(RT_perf, as.formula(paste("pairwise ~", s)),
-                      tran = "log", type = "response")
+        ## revpairwise gives incongruent / congruent (positive = slower for incongruent)
+        contr <- if (grepl("^congruence", s)) "revpairwise" else "pairwise"
+        emm <- emmeans(RT_perf, as.formula(paste(contr, "~", s)),
+                    tran = "log", type = "response")
         Compute.CI(emm, label = s)
     })
 
@@ -336,4 +341,82 @@ LRT.Accuracy <- function(data) {
 
     result_accuracy <- afex::nice(accuracy_LRT)
     write_csv(result_accuracy, "./2-Task_Cond_Effect/Outputs/Accuracy_LRT_results.csv")
+}
+
+
+## Plots % predicted accuracy for congruence
+Plots.Accuracy <- function(model) {
+
+    acc_perf <- read_rds(model)
+
+    ## Model-based accuracy per congruence level, averaged over other factors
+    ## type = "response" back-transforms from log-odds to probability
+    emm <- emmeans(acc_perf, ~ congruence, type = "response")
+    emm_df <- as.data.frame(emm)   # columns: congruence, prob, SE, df, asymp.LCL, asymp.UCL
+
+    cong_acc <- ggplot(emm_df, aes(x = congruence, y = prob * 100)) +
+            geom_point(size = 4) +
+            geom_errorbar(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100),
+                          linewidth = 1, width = .1) +
+            labs(x = "Congruence", y = "Predicted accuracy (%)") +
+            theme_classic() +
+            theme(axis.text = element_text(size = 12),
+                  axis.title = element_text(size = 14, face = "bold"))
+
+    ggsave("./2-Task_Cond_Effect/Outputs/Accuracy_Congruence.pdf", cong_acc, width = 5, height = 5)
+}
+
+
+Compute.OR <- function(my.emm, label) {
+
+    ci  <- as.data.frame(confint(my.emm$contrasts))
+    lcl <- grep("LCL|lower.CL", names(ci), value = TRUE)
+    ucl <- grep("UCL|upper.CL", names(ci), value = TRUE)
+
+    ci$analysis <- label
+    ci$OR <- ci$odds.ratio
+    ci$OR_lo <- ci[[lcl]]
+    ci$OR_hi <- ci[[ucl]]
+
+    ci[, setdiff(names(ci), c("SE", "df", "odds.ratio", lcl, ucl))]
+}
+
+Odds.Ratio.Acc <- function(model) {
+
+    acc_perf <- read_rds(model)
+
+    specs <- c(
+        "congruence",
+        "frequency",
+        "face_emotion",
+        "congruence | frequency",
+        "congruence | face_emotion",
+        "face_emotion | frequency",
+        "congruence | frequency * face_emotion",
+        "sex",
+        "ethnicity"
+    )
+
+    res <- lapply(specs, function(s) {
+        ## revpairwise gives incongruent / congruent odds of a correct response
+        contr <- if (grepl("^congruence", s)) "revpairwise" else "pairwise"
+        ## no tran = "log" as it is for a model fit to a log transformed outcome
+        emm <- emmeans(acc_perf, as.formula(paste(contr, "~", s)), type = "response")
+        Compute.OR(emm, label = s)
+    })
+
+    ## For age, OR per doubling of age (assumes log_age = natural log)
+    b  <- unname(fixef(acc_perf)["log_age"])
+    ci <- confint(acc_perf, parm = "log_age", method = "Wald")
+    res_age <- data.frame(
+        analysis = "age",
+        contrast = "doubling of age",
+        OR       = 2^b,
+        OR_lo    = 2^ci[1, 1],
+        OR_hi    = 2^ci[1, 2]
+    )
+
+    all_res <- dplyr::bind_rows(c(res, list(res_age)))
+    write_csv(all_res, "./2-Task_Cond_Effect/Outputs/Acc_Odds_Ratios.csv")
+    return(all_res)
 }
