@@ -167,16 +167,9 @@ Plots.RT <- function(model, EST.data) {
     pred_age$upper_ms <- exp(pred_age$conf.high)
 
     age_plot <- ggplot(pred_age, aes(age, RT_ms)) +
-            geom_line() +
-            geom_ribbon(
-                aes(ymin = lower_ms,
-                    ymax = upper_ms),
-                alpha = .2
-            ) +
-            labs(
-                x = "Age (years)",
-                y = "Predicted RT (ms)"
-            ) +
+            geom_line(colour = "#339999") +
+            geom_ribbon(aes(ymin = lower_ms, ymax = upper_ms), fill = "#339999", alpha = .2) +
+            labs(x = "Age (years)",y = "Predicted RT (ms)") +
             theme_classic()
     
     ggsave("./2-Task_Cond_Effect/Outputs/RT_Age.pdf", age_plot, width = 8, height = 5)
@@ -344,11 +337,12 @@ LRT.Accuracy <- function(data) {
 }
 
 
-## Plots % predicted accuracy for congruence
-Plots.Accuracy <- function(model) {
+## Plots % predicted accuracy for congruence and age
+Plots.Accuracy <- function(model, EST.data) {
 
     acc_perf <- read_rds(model)
 
+    ## ---- Congruency ----
     ## Model-based accuracy per congruence level, averaged over other factors
     ## type = "response" back-transforms from log-odds to probability
     emm <- emmeans(acc_perf, ~ congruence, type = "response")
@@ -364,6 +358,36 @@ Plots.Accuracy <- function(model) {
                   axis.title = element_text(size = 14, face = "bold"))
 
     ggsave("./2-Task_Cond_Effect/Outputs/Accuracy_Congruence.pdf", cong_acc, width = 5, height = 5)
+
+
+    ## ---- Age ----
+
+    EST <- read_rds(EST.data)
+    ## Same centering constant as Center.Age() used when fitting the model
+    age_center <- mean(log(EST$age[!duplicated(EST$SID)]))
+
+    ## Grid of ages across the observed range (centered log age is what the model uses)
+    ages <- seq(min(EST$age), max(EST$age), length.out = 100)
+    log_age <- log(ages) - age_center
+
+    ## Predicted probability of a correct response by age, averaged over other factors
+    ## type = "response" back-transforms from log-odds to probability
+    emm_age <- emmeans(acc_perf, ~ log_age, at = list(log_age = log_age), type = "response")
+    ## columns: log_age, prob, SE, df, asymp.LCL, asymp.UCL
+    pred_age <- as.data.frame(emm_age)
+
+    ## Back to age in years
+    pred_age$age <- exp(pred_age$log_age + age_center)
+
+    age_plot <- ggplot(pred_age, aes(age, prob * 100)) +
+            geom_line(colour = "#339999") +
+            geom_ribbon(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100), fill = "#339999", alpha = .2) +
+            labs(x = "Age (years)", y = "Predicted accuracy (%)") +
+            theme_classic() +
+            theme(axis.text = element_text(size = 12),
+                  axis.title = element_text(size = 14, face = "bold"))
+
+    ggsave("./2-Task_Cond_Effect/Outputs/Accuracy_Age.pdf", age_plot, width = 6, height = 4)
 }
 
 
