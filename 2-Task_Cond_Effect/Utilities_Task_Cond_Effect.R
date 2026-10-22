@@ -170,7 +170,9 @@ Plots.RT <- function(model, EST.data) {
             geom_line(colour = "#339999") +
             geom_ribbon(aes(ymin = lower_ms, ymax = upper_ms), fill = "#339999", alpha = .2) +
             labs(x = "Age (years)",y = "Predicted RT (ms)") +
-            theme_classic()
+            theme_classic() +
+            theme(axis.text = element_text(size = 12),
+                  axis.title = element_text(size = 14, face = "bold"))
     
     ggsave("./2-Task_Cond_Effect/Outputs/RT_Age.pdf", age_plot, width = 8, height = 5)
 }
@@ -526,6 +528,10 @@ Model.Acc.RandomSlope <- function(data) {
                     + (1 + congruence + face_emotion + frequency | SID), 
                     family = binomial(), data = dat, check_contrasts = TRUE, method = "LRT")
 
+    ## save model as rds for model comp
+    write_rds(accuracy_LRT, "./2-Task_Cond_Effect/Outputs/Suppl_Acc_LRT_results.rds")
+
+    ## save results as csv for reporting
     result_accuracy <- afex::nice(accuracy_LRT)
     write_csv(result_accuracy, "./2-Task_Cond_Effect/Outputs/Suppl_Acc_RS_LRT_results.csv")
 
@@ -534,7 +540,7 @@ Model.Acc.RandomSlope <- function(data) {
     ## Three way interaction between accuracy and congruence/frequency/face emotion
     ## type = "response" back-transforms from log-odds to probability
     emm <- emmeans(accuracy_random_slope, ~ congruence * frequency * face_emotion, type = "response")
-    emm_df <- as.data.frame(emm)   # columns: congruence, prob, SE, df, asymp.LCL, asymp.UCL
+    emm_df <- as.data.frame(emm)
 
     cong_acc <- ggplot(emm_df, aes(
                         x = congruence, 
@@ -554,5 +560,5 @@ Model.Acc.RandomSlope <- function(data) {
                         legend.text = element_text(size = 12)) +
             scale_color_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More congruent"))
 
-    ggsave("./2-Task_Cond_Effect/Outputs/Suppl_Acc_Congruence.pdf", cong_acc, width = 5, height = 5)
+    ggsave("./2-Task_Cond_Effect/Outputs/Suppl_Acc_Congruence.pdf", cong_acc, width = 15, height = 5)
 }
