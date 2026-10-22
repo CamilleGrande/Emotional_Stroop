@@ -23,7 +23,7 @@
     cognition.data = "./0-Data_Prep/Outputs/Tidy_cognition.rds"
     FactorAnalysis.output = "./3-Cognitive_Factors_Effect/Outputs/Factor_Scores.csv"
     model.rt = "./3-Cognitive_Factors_Effect/Outputs/RT_Model_results.rds"
-    model.acc = "./3-Cognitive_Factors_Effect/Outputs/Accuracy_Model_results.rds"
+    model.acc = "./3-Cognitive_Factors_Effect/Outputs/Acc_Model_results.rds"
 
 
 ## Confirmatory Factor Analysis on whole sample
@@ -35,3 +35,7 @@
     Percent.Change.RT(model.rt)
     LRT.Accuracy(EST.data, FactorAnalysis.output)
     Odds.Ratio.Acc(model.acc)
+
+## Supplements
+## Here, no test on accuracy expended model as does not converge, cannot trust results
+    Model.RT.RandomSlope(EST.data, FactorAnalysis.output)

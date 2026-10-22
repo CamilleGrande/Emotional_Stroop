@@ -143,7 +143,7 @@ Plots.RT <- function(model, EST.data) {
                         axis.title = element_text(size = 14, face = "bold"),
                         strip.text.x = element_text(size = 12),
                         legend.text = element_text(size = 12)) +
-                scale_color_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More frequent"))
+                scale_color_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More congruent"))
    
     ggsave("./2-Task_Cond_Effect/Outputs/RT_Three_way_interaction.pdf", three_way_plot, width = 8, height = 5)
 
@@ -187,11 +187,11 @@ Compute.CI <- function(my.emm, label) {
 
     ci$analysis <- label
     ## negative = faster
-    ci$pct_change <- 100 * (ci$ratio - 1)
+    ci$pct_change <- round((100 * (ci$ratio - 1)), 2)
     ## order preserved, no flip as ratio - 1 is an increasing function
     ## before had 1 - ratio, which is a decreasing function so had to reverse lcl as uci and ucl as lci
-    ci$pct_lo <- 100 * (ci[[lcl]] - 1)
-    ci$pct_hi <- 100 * (ci[[ucl]] - 1)
+    ci$pct_lo <- round((100 * (ci[[lcl]] - 1)), 2)
+    ci$pct_hi <- round((100 * (ci[[ucl]] - 1)), 2)
     
     clean_ci <- ci[, setdiff(names(ci), c("SE", "df", "null", "z.ratio", "p.value", lcl, ucl, "ratio"))]
     return(clean_ci)
@@ -227,15 +227,23 @@ Percent.Change.RT <- function(model) {
         Compute.CI(emm, label = s)
     })
 
-    ## For age, % change in RT per doubling of age (assumes log_age = natural log)
+    ## For age, % change in RT per 1 SD of log-age
+    ## beta
     b  <- unname(fixef(RT_perf)["log_age"])
+    ## confidence interval
     ci <- confint(RT_perf, parm = "log_age", method = "Wald")
+
+    ## SD at the participant level (age is between-subject, so we don't use trial-level rows,
+    ## which would weight people by how many trials they contributed)
+    mf <- model.frame(RT_perf)
+    sd_logage <- sd(mf$log_age[!duplicated(mf$SID)])
+
     res_age <- data.frame(
         analysis   = "age",
-        contrast   = "doubling of age",
-        pct_change = 100 * (2^b - 1),
-        pct_lo     = 100 * (2^ci[1, 1] - 1),
-        pct_hi     = 100 * (2^ci[1, 2] - 1)
+        contrast   = "+1 SD of log(age)",
+        pct_change = round((100 * (exp(b * sd_logage) - 1)), 2),
+        pct_lo     = round((100 * (exp(ci[1, 1] * sd_logage) - 1)), 2),
+        pct_hi     = round((100 * (exp(ci[1, 2] * sd_logage) - 1)), 2)
     )
 
     all_res <- dplyr::bind_rows(c(res, list(res_age)))
@@ -265,7 +273,7 @@ Modelling.Accuracy <- function(data) {
                     + (1 | SID),
                     data = dat, family = binomial(link = "logit"))
 
-    write_rds(accuracy, "./2-Task_Cond_Effect/Outputs/Accuracy_Model_results.rds")
+    write_rds(accuracy, "./2-Task_Cond_Effect/Outputs/Acc_Model_results.rds")
 
 
     cat("\nChecking assumptions for our Binomial Generalized Linear Mixed Model\n")
@@ -274,14 +282,14 @@ Modelling.Accuracy <- function(data) {
     ## Computes VIF, 0-5 = low, 5-10 = moderate, > 10 = high multicollinearity
     collinearity <- check_collinearity(accuracy)
     cat("\nLook at csv to assess collinearity\n")
-    write_csv(collinearity, "./2-Task_Cond_Effect/Outputs/Accuracy_Collinearity.csv")
+    write_csv(collinearity, "./2-Task_Cond_Effect/Outputs/Acc_Collinearity.csv")
 
 
     ## Simulation-based residual diagnostics (DHARMa)
     ## Calculates randomized quantile residuals 
     sim_res <- simulateResiduals(fittedModel = accuracy, n = 1000, plot = F)
 
-    pdf("./2-Task_Cond_Effect/Outputs/Accuracy_Assumptions.pdf")
+    pdf("./2-Task_Cond_Effect/Outputs/Acc_Assumptions.pdf")
         ## QQ plot + residual plot residuals fitted vs. simulated
         plot(sim_res)
         ## Dispersion check
@@ -330,10 +338,10 @@ LRT.Accuracy <- function(data) {
     ## Each test compares the full model against one with that term's column removed (Type 3)
     ## A factor with 3+ levels gets a single omnibus test here, rather than several coefficient rows
     print(accuracy_LRT)
-    write_rds(accuracy_LRT, "./2-Task_Cond_Effect/Outputs/Accuracy_LRT_results.rds")
+    write_rds(accuracy_LRT, "./2-Task_Cond_Effect/Outputs/Acc_LRT_results.rds")
 
     result_accuracy <- afex::nice(accuracy_LRT)
-    write_csv(result_accuracy, "./2-Task_Cond_Effect/Outputs/Accuracy_LRT_results.csv")
+    write_csv(result_accuracy, "./2-Task_Cond_Effect/Outputs/Acc_LRT_results.csv")
 }
 
 
@@ -357,7 +365,7 @@ Plots.Accuracy <- function(model, EST.data) {
             theme(axis.text = element_text(size = 12),
                   axis.title = element_text(size = 14, face = "bold"))
 
-    ggsave("./2-Task_Cond_Effect/Outputs/Accuracy_Congruence.pdf", cong_acc, width = 5, height = 5)
+    ggsave("./2-Task_Cond_Effect/Outputs/Acc_Congruence.pdf", cong_acc, width = 5, height = 5)
 
 
     ## ---- Age ----
@@ -387,7 +395,7 @@ Plots.Accuracy <- function(model, EST.data) {
             theme(axis.text = element_text(size = 12),
                   axis.title = element_text(size = 14, face = "bold"))
 
-    ggsave("./2-Task_Cond_Effect/Outputs/Accuracy_Age.pdf", age_plot, width = 6, height = 4)
+    ggsave("./2-Task_Cond_Effect/Outputs/Acc_Age.pdf", age_plot, width = 6, height = 4)
 }
 
 
@@ -398,9 +406,9 @@ Compute.OR <- function(my.emm, label) {
     ucl <- grep("UCL|upper.CL", names(ci), value = TRUE)
 
     ci$analysis <- label
-    ci$OR <- ci$odds.ratio
-    ci$OR_lo <- ci[[lcl]]
-    ci$OR_hi <- ci[[ucl]]
+    ci$OR <- round(ci$odds.ratio, 2)
+    ci$OR_lo <- round(ci[[lcl]], 2)
+    ci$OR_hi <- round(ci[[ucl]], 2)
 
     ci[, setdiff(names(ci), c("SE", "df", "odds.ratio", lcl, ucl))]
 }
@@ -429,18 +437,122 @@ Odds.Ratio.Acc <- function(model) {
         Compute.OR(emm, label = s)
     })
 
-    ## For age, OR per doubling of age (assumes log_age = natural log)
+    ## For age, OR per 1 SD of log age
+    ## If want per 1 log age, just exponentiate the coefficient
     b  <- unname(fixef(acc_perf)["log_age"])
     ci <- confint(acc_perf, parm = "log_age", method = "Wald")
+
+    ## Participant-level SD (age is between-subject, so avoid trial-level rows)
+    mf <- model.frame(acc_perf)
+    sd_logage <- sd(mf$log_age[!duplicated(mf$SID)])
+
     res_age <- data.frame(
         analysis = "age",
-        contrast = "doubling of age",
-        OR       = 2^b,
-        OR_lo    = 2^ci[1, 1],
-        OR_hi    = 2^ci[1, 2]
+        contrast = "+1 SD of log(age)",
+        OR       = round(exp(b * sd_logage), 2),
+        OR_lo    = round(exp(ci[1, 1] * sd_logage), 2),
+        OR_hi    = round(exp(ci[1, 2] * sd_logage), 2)
     )
 
     all_res <- dplyr::bind_rows(c(res, list(res_age)))
     write_csv(all_res, "./2-Task_Cond_Effect/Outputs/Acc_Odds_Ratios.csv")
     return(all_res)
+}
+
+
+## To test if results with random intercept only are similar to random slope + intercept
+Model.RT.RandomSlope <- function(data) {
+
+    dat <- read_rds(data) |>
+                ## Keeping only RT for correct trials
+                subset(correct == "correct") |>
+                    ## Centering log age for easier interpretation
+                    ## The intercept will now refer to an average-aged participant
+                    Center.Age()
+    
+    ## Set contrasts to sum-to-zero coding so that it matches mixed() output later
+    options(contrasts = c("contr.sum", "contr.poly"))
+
+    ## Compute RT log-scores
+    dat$log_rt <- log(dat$reaction_time)
+
+    ## Excluded trials + RT Log-scored
+    RT_random_slope <- lmer(log_rt ~ congruence * frequency * face_emotion + log_age + sex + ethnicity 
+                    + (1 + congruence + frequency + face_emotion | SID),
+                    data = dat, REML = T)
+
+    write_rds(RT_random_slope, "./2-Task_Cond_Effect/Outputs/Suppl_RT_RS_Model_results.rds")
+
+    RT_Random_slope_Anova <- afex::mixed(log_rt ~ congruence * frequency * face_emotion + log_age + sex + ethnicity
+                     + (1 + congruence + frequency + face_emotion | SID), data = dat, method = "S")
+
+    my.ef <- effectsize::eta_squared(RT_Random_slope_Anova$full_model, partial = TRUE) |>
+                dplyr::rename(term = Parameter)
+
+    results_RT <- afex::nice(RT_Random_slope_Anova) |>
+                    dplyr::rename(term = Effect) |>
+                        dplyr::left_join(my.ef, by = "term")
+
+    write.csv(results_RT, "./2-Task_Cond_Effect/Outputs/Suppl_RT_RS_Anova_results.csv")
+
+    ## Three way interaction plot does not change between random intercept only model
+    ## and random intercept + random slope model; got rid of the plotting part here
+}
+
+
+## To test if results with random intercept only are similar to random slope + intercept
+Model.Acc.RandomSlope <- function(data) {
+
+     dat <- read_rds(data) |>
+                mutate(correct = case_when(
+                    correct == "correct"   ~ 1,
+                    correct == "incorrect" ~ 0
+                ), .keep = "unused") |>
+                    ## Centering log age for easier interpretation
+                    ## The intercept will now refer to an average-aged participant
+                    Center.Age()
+
+    ## Set contrasts to sum-to-zero coding so that it matches mixed() output later
+    ## Age is centered in data prep
+    options(contrasts = c("contr.sum", "contr.poly"))
+
+    ## Accuracy glmm model with random slope and random intercept
+    accuracy_random_slope <- glmer(correct ~ congruence * frequency * face_emotion + log_age + sex + ethnicity
+                    + (1 + congruence + face_emotion + frequency | SID),
+                    data = dat, family = binomial(link = "logit"))
+
+    ## Likelihood ratio part
+    accuracy_LRT <- afex::mixed(correct ~ congruence * frequency * face_emotion + log_age + sex + ethnicity
+                    + (1 + congruence + face_emotion + frequency | SID), 
+                    family = binomial(), data = dat, check_contrasts = TRUE, method = "LRT")
+
+    result_accuracy <- afex::nice(accuracy_LRT)
+    write_csv(result_accuracy, "./2-Task_Cond_Effect/Outputs/Suppl_Acc_RS_LRT_results.csv")
+
+
+    ## ---- Plot three way ----
+    ## Three way interaction between accuracy and congruence/frequency/face emotion
+    ## type = "response" back-transforms from log-odds to probability
+    emm <- emmeans(accuracy_random_slope, ~ congruence * frequency * face_emotion, type = "response")
+    emm_df <- as.data.frame(emm)   # columns: congruence, prob, SE, df, asymp.LCL, asymp.UCL
+
+    cong_acc <- ggplot(emm_df, aes(
+                        x = congruence, 
+                        y = prob * 100,
+                        color = frequency,
+                        group = frequency)) +
+            geom_point(size = 4) +
+            geom_errorbar(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100),
+                          linewidth = 1, width = .1) +
+            facet_wrap(~ face_emotion) +
+                ylab("Predicted RT (ms)") +
+                labs(x = "Congruence", y = "Predicted accuracy (%)", color = "Frequency") +
+            theme_classic() +
+            theme(axis.text = element_text(size = 12),
+                  axis.title = element_text(size = 14, face = "bold"),
+                        strip.text.x = element_text(size = 12),
+                        legend.text = element_text(size = 12)) +
+            scale_color_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More congruent"))
+
+    ggsave("./2-Task_Cond_Effect/Outputs/Suppl_Acc_Congruence.pdf", cong_acc, width = 5, height = 5)
 }
