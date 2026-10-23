@@ -571,4 +571,6 @@ OR.Acc.Suppl <- function(model_RS) {
 
     cong_or <- contrast(emm, "revpairwise") 
     summary(cong_or, type = "response", infer = TRUE)
+
+    pairs(cong_or, by = "face_emotion")
 }
