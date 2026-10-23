@@ -20,6 +20,7 @@
     ## These files will get created when running this script
     model.rt = "./2-Task_Cond_Effect/Outputs/RT_Model_results.rds"
     model.acc = "./2-Task_Cond_Effect/Outputs/Acc_Model_results.rds"
+    model.acc.rs = "./2-Task_Cond_Effect/Outputs/Suppl_Acc_RS_Model_results.rds"
 
 ## Main analysis
     ANOVA.RT(data.all)
@@ -32,3 +33,4 @@
 ## Supplements
     Model.RT.RandomSlope(data.all)
     Model.Acc.RandomSlope(data.all)
+    Mean.Acc.Diff.Suppl(model.acc.rs)

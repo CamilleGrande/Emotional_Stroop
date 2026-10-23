@@ -562,3 +562,28 @@ Model.Acc.RandomSlope <- function(data) {
 
     ggsave("./2-Task_Cond_Effect/Outputs/Suppl_Acc_Congruence.pdf", cong_acc, width = 8, height = 8)
 }
+
+Mean.Acc.Diff.Suppl <- function(model_RS) {
+
+    accuracy_random_slope <- read_rds(model_RS)
+
+    emm <- emmeans(accuracy_random_slope, ~ congruence * frequency * face_emotion, type = "response")
+    emm_df <- as.data.frame(emm)
+
+    ## Compute mean acc difference
+    cat(paste0("\n\nEqual/Angry congruency effect difference on accuracy = ", round(emm_df$prob[2] - emm_df$prob[1], 4),
+        "\nLower SE = ", round(emm_df$asymp.LCL[2] - emm_df$asymp.LCL[1], 4), 
+        "\nUpper SE = ", round(emm_df$asymp.UCL[2] - emm_df$asymp.UCL[1], 4)))
+
+    cat(paste0("\n\nMore Cong/Angry congruency effect difference on accuracy = ", round(emm_df$prob[4] - emm_df$prob[3], 4),
+        "\nLower SE = ", round(emm_df$asymp.LCL[4] - emm_df$asymp.LCL[3], 4),
+        "\nUpper SE = ", round(emm_df$asymp.UCL[4] - emm_df$asymp.UCL[3], 4)))
+
+    cat(paste0("\n\nEqual/Happy congruency effect difference on accuracy = ", round(emm_df$prob[6] - emm_df$prob[5], 4),
+        "\nLower SE = ", round(emm_df$asymp.LCL[6] - emm_df$asymp.LCL[5], 4),
+        "\nUpper SE = ", round(emm_df$asymp.UCL[6] - emm_df$asymp.UCL[5], 4)))
+
+    cat(paste0("\n\nMore Cong/Angry congruency effect difference on accuracy = ", round(emm_df$prob[8] - emm_df$prob[7], 4),
+        "\nLower SE = ", round(emm_df$asymp.LCL[8] - emm_df$asymp.LCL[7], 4),
+        "\nUpper SE = ", round(emm_df$asymp.UCL[8] - emm_df$asymp.UCL[7], 4), "\n"))
+}
