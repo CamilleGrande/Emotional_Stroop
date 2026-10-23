@@ -33,4 +33,4 @@
 ## Supplements
     Model.RT.RandomSlope(data.all)
     Model.Acc.RandomSlope(data.all)
-    Mean.Acc.Diff.Suppl(model.acc.rs)
+    OR.Acc.Suppl(model.acc.rs)
