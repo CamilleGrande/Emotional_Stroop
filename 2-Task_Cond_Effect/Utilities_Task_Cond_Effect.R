@@ -136,8 +136,7 @@ Plots.RT <- function(model, EST.data) {
                 geom_line(linewidth = 1) +
                 geom_errorbar(aes(ymin = lower_ms, ymax = upper_ms), linewidth = 1, width = .1) +
                 facet_wrap(~ face_emotion) +
-                ylab("Predicted RT (ms)") +
-                labs(color = "Frequency") +
+                labs(x = "Congruence", y = "Predicted RT (ms)", color = "Frequency") +
                 theme_classic() +
                 theme(axis.text = element_text(size = 12),
                         axis.title = element_text(size = 14, face = "bold"),
@@ -522,14 +521,14 @@ Model.Acc.RandomSlope <- function(data) {
     accuracy_random_slope <- glmer(correct ~ congruence * frequency * face_emotion + log_age + sex + ethnicity
                     + (1 + congruence + face_emotion + frequency | SID),
                     data = dat, family = binomial(link = "logit"))
+    
+    ## save model as rds for model comp
+    write_rds(accuracy_random_slope, "./2-Task_Cond_Effect/Outputs/Suppl_Acc_RS_Model_results.rds")
 
     ## Likelihood ratio part
     accuracy_LRT <- afex::mixed(correct ~ congruence * frequency * face_emotion + log_age + sex + ethnicity
                     + (1 + congruence + face_emotion + frequency | SID), 
                     family = binomial(), data = dat, check_contrasts = TRUE, method = "LRT")
-
-    ## save model as rds for model comp
-    write_rds(accuracy_LRT, "./2-Task_Cond_Effect/Outputs/Suppl_Acc_LRT_results.rds")
 
     ## save results as csv for reporting
     result_accuracy <- afex::nice(accuracy_LRT)
@@ -548,6 +547,7 @@ Model.Acc.RandomSlope <- function(data) {
                         color = frequency,
                         group = frequency)) +
             geom_point(size = 4) +
+            geom_line(linewidth = 1) +
             geom_errorbar(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100),
                           linewidth = 1, width = .1) +
             facet_wrap(~ face_emotion) +
@@ -560,5 +560,5 @@ Model.Acc.RandomSlope <- function(data) {
                         legend.text = element_text(size = 12)) +
             scale_color_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More congruent"))
 
-    ggsave("./2-Task_Cond_Effect/Outputs/Suppl_Acc_Congruence.pdf", cong_acc, width = 15, height = 5)
+    ggsave("./2-Task_Cond_Effect/Outputs/Suppl_Acc_Congruence.pdf", cong_acc, width = 8, height = 8)
 }
