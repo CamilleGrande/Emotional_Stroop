@@ -433,7 +433,6 @@ Odds.Ratio.Acc <- function(model) {
     res <- lapply(specs, function(s) {
         ## revpairwise gives incongruent / congruent odds of a correct response
         contr <- if (grepl("^congruence", s)) "revpairwise" else "pairwise"
-        ## no tran = "log" as it is for a model fit to a log transformed outcome
         emm <- emmeans(acc_perf, as.formula(paste(contr, "~", s)), type = "response")
         Compute.OR(emm, label = s)
     })
@@ -572,5 +571,5 @@ OR.Acc.Suppl <- function(model_RS) {
     cong_or <- contrast(emm, "revpairwise") 
     summary(cong_or, type = "response", infer = TRUE)
 
-    pairs(cong_or, by = "face_emotion")
+    pairs(cong_or, by = "congruence")
 }
