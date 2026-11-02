@@ -7,9 +7,9 @@
 ## Libraries needed to run the script
     library(tidyverse)
     library(lme4)
+    library(lmerTest)
     library(broom.mixed)
     library(emmeans)
-
 
 ## Utility script
     source("./4-Clinical_Sympt_Prediction/Utilities_Clinical_Prediction.R")
