@@ -23,18 +23,22 @@
     cognition.data = "./0-Data_Prep/Outputs/Tidy_cognition.rds"
     FactorAnalysis.output = "./3-Cognitive_Factors_Effect/Outputs/Factor_Scores.csv"
     model.rt = "./3-Cognitive_Factors_Effect/Outputs/RT_Model_results.rds"
+    model.f2 = "./3-Cognitive_Factors_Effect/Outputs/f2_RT_Model_results.rds"
     model.acc = "./3-Cognitive_Factors_Effect/Outputs/Acc_Model_results.rds"
+    model.acc.f3 = "./3-Cognitive_Factors_Effect/Outputs/f3_Acc_Model_results.rds"
 
 
 ## Confirmatory Factor Analysis on whole sample
 ## Output is a csv file in Outputs folder
-    CFA.Analysis(cognition.data)
+    #CFA.Analysis(cognition.data)
 
 ## Modelling RT and Accuracy with factors from CFA
     ANOVA.RT(EST.data, FactorAnalysis.output)
     Percent.Change.RT(model.rt)
+    Percent.Change.RT(model.f2, f2.interaction = TRUE)
     LRT.Accuracy(EST.data, FactorAnalysis.output)
     Odds.Ratio.Acc(model.acc)
+    Odds.Ratio.Acc(model.acc.f3, f3.interaction = TRUE)
 
 ## Supplements
 ## Here, no test on accuracy expended model as does not converge, cannot trust results

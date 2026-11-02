@@ -66,6 +66,13 @@ Modelling.RT <- function(EST.data, cog.data) {
     
     write_rds(model2, "./3-Cognitive_Factors_Effect/Outputs/RT_Model_results.rds")
 
+    ## ---- Interaction with f2 ----
+    RT_f2 <- lmer(log_rt ~ congruence * frequency * face_emotion * f2 + f1 + f3 + log_age + sex + ethnicity 
+                    + (1 | SID),
+                    data = dat, REML = T)
+
+    write_rds(RT_f2, "./3-Cognitive_Factors_Effect/Outputs/f2_RT_Model_results.rds")
+
 
     ## Residuals are linearly distributed (similar deviations)
     ## Homoskedasticity OK (no funnel plot)
@@ -135,6 +142,19 @@ ANOVA.RT <- function(data, cog.data) {
                         dplyr::left_join(my.ef, by = "term")
 
     write.csv(results_RT, "./3-Cognitive_Factors_Effect/Outputs/RT_Anova_results.csv")
+
+    ## ---- Interaction with f2 ----
+    RT_Anova_f2 <- afex::mixed(log_rt ~ congruence * frequency * face_emotion * f2 + f1 + f3 + log_age + sex + ethnicity
+                     + (1 | SID), data = dat, method = "S")
+
+    my.ef_f2 <- effectsize::eta_squared(RT_Anova_f2$full_model, partial = TRUE) |>
+                dplyr::rename(term = Parameter)
+
+    results_RT_f2 <- afex::nice(RT_Anova_f2) |>
+                    dplyr::rename(term = Effect) |>
+                        dplyr::left_join(my.ef_f2, by = "term")
+
+    write.csv(results_RT_f2, "./3-Cognitive_Factors_Effect/Outputs/f2_RT_Anova_results.csv")
 }
 
 
@@ -160,7 +180,7 @@ Compute.CI <- function(my.emm, label) {
 }
 
 
-Percent.Change.RT <- function(model) {
+Percent.Change.RT <- function(model, f2.interaction = FALSE) {
 
     ## Model already fitted
     RT_perf <- read_rds(model)
@@ -180,6 +200,17 @@ Percent.Change.RT <- function(model) {
         "ethnicity"
     )
 
+    if (f2.interaction == TRUE ) {
+        specs <- c(specs,
+                "congruence | f2",
+                "frequency | f2",
+                "face_emotion | f2",
+                "congruence | frequency * f2",
+                "congruence | face_emotion * f2",
+                "frequency | face_emotion * f2",
+                "congruence | frequency * face_emotion * f2")
+    }
+
     ## one list with all comparisons and CIs
     res <- lapply(specs, function(s) {
         ## revpairwise gives incongruent / congruent (positive = slower for incongruent)
@@ -188,6 +219,21 @@ Percent.Change.RT <- function(model) {
                     tran = "log", type = "response")
         Compute.CI(emm, label = s)
     })
+
+    ## Only compute this part if interaction with frequency
+    if (f2.interaction == TRUE) {
+
+        ## compute sd f2
+        mf   <- model.frame(RT_perf)
+        sd_f2 <- sd(mf$f2[!duplicated(mf$SID)])
+
+        ## How big is the frequency effect at -1 SD, mean, and +1 SD of f2?
+        emm_freq_f2 <- emmeans(RT_perf, pairwise ~ frequency | f2,
+                            at = list(f2 = c(-sd_f2, 0, sd_f2)), tran = "log", type = "response")
+
+        ## 1st line is -1SD, second one mean, third one +1SD
+        res_f2 <- Compute.CI(emm_freq_f2, label = "frequency | f2 (-1 SD, mean, +1 SD)")
+    }
 
     ## For age, % change in RT per 1 SD of log-age
     ## beta
@@ -233,8 +279,15 @@ Percent.Change.RT <- function(model) {
         )
     }))
 
-    all_res <- dplyr::bind_rows(c(res, list(res_age, res_cog)))
-    write_csv(all_res, "./3-Cognitive_Factors_Effect/Outputs/RT_Percent_Change.csv")
+    if (f2.interaction == TRUE ) {
+        all_res <- dplyr::bind_rows(c(res, list(res_f2, res_age, res_cog)))
+        fn <- "./3-Cognitive_Factors_Effect/Outputs/f2_RT_Percent_Change.csv"
+    } else {
+        all_res <- dplyr::bind_rows(c(res, list(res_age, res_cog)))
+        fn <- "./3-Cognitive_Factors_Effect/Outputs/RT_Percent_Change.csv"
+    }
+
+    write_csv(all_res, fn)
     return(all_res)
 }
 
@@ -270,6 +323,13 @@ Modelling.Accuracy <- function(EST.data, cog.data) {
                     data = dat, family = binomial(link = "logit"))
 
     write_rds(accuracy, "./3-Cognitive_Factors_Effect/Outputs/Acc_Model_results.rds")
+
+    ## ---- Interaction with f3 ----
+    accuracy_f3 <- glmer(correct ~ congruence * frequency * face_emotion * f3 + f1 + f2 + log_age + sex + ethnicity
+                    + (1 | SID),
+                    data = dat, family = binomial(link = "logit"))
+
+    write_rds(accuracy_f3, "./3-Cognitive_Factors_Effect/Outputs/f3_Acc_Model_results.rds")
 
 
     cat("\nChecking assumptions for our Binomial Generalized Linear Mixed Model\n")
@@ -341,11 +401,26 @@ LRT.Accuracy <- function(data, cog.data) {
     ## Likelihood ratio test chi square, one row per model term
     ## Each test compares the full model against one with that term's column removed (Type 3)
     ## A factor with 3+ levels gets a single omnibus test here, rather than several coefficient rows
+    cat("\nAccuracy LRT: \n")
     print(accuracy_LRT)
     write_rds(accuracy_LRT, "./3-Cognitive_Factors_Effect/Outputs/Acc_LRT_results.rds")
 
     result_accuracy <- afex::nice(accuracy_LRT)
     write_csv(result_accuracy, "./3-Cognitive_Factors_Effect/Outputs/Acc_LRT_results.csv")
+
+    ## ---- Interaction with f3 ----
+    accuracy_LRT_f3 <- afex::mixed(correct ~ congruence * frequency * face_emotion * f3 + f1 + f2 + log_age + sex + ethnicity
+                    + (1 | SID), family = binomial(), data = dat, check_contrasts = TRUE, method = "LRT")
+
+    ## Likelihood ratio test chi square, one row per model term
+    ## Each test compares the full model against one with that term's column removed (Type 3)
+    ## A factor with 3+ levels gets a single omnibus test here, rather than several coefficient rows
+    cat("\nAccuracy LRT interaction f3: \n")
+    print(accuracy_LRT_f3)
+    write_rds(accuracy_LRT_f3, "./3-Cognitive_Factors_Effect/Outputs/f3_Acc_LRT_results.rds")
+
+    result_accuracy_f3 <- afex::nice(accuracy_LRT_f3)
+    write_csv(result_accuracy_f3, "./3-Cognitive_Factors_Effect/Outputs/f3_Acc_LRT_results.csv")
 }
 
 
@@ -366,7 +441,7 @@ Compute.OR <- function(my.emm, label) {
 }
 
 
-Odds.Ratio.Acc <- function(model) {
+Odds.Ratio.Acc <- function(model, f3.interaction = FALSE) {
 
     ## Model already fitted
     acc_perf <- read_rds(model)
@@ -383,14 +458,44 @@ Odds.Ratio.Acc <- function(model) {
         "ethnicity"
     )
 
+    if (f3.interaction == TRUE ) {
+        specs <- c(specs,
+                "congruence | f3",
+                "frequency | f3",
+                "face_emotion | f3",
+                "congruence | frequency * f3",
+                "congruence | face_emotion * f3",
+                "frequency | face_emotion * f3",
+                "congruence | frequency * face_emotion * f3")
+    }
+
     res <- lapply(specs, function(s) {
         ## pairwise gives congruent / incongruent (OR > 1 = more accurate when congruent)
-        ## use "revpairwise" instead if you want incongruent / congruent, like in the RT script
         ## no tran = "log": emmeans already knows the logit link
-        emm <- emmeans(acc_perf, as.formula(paste("pairwise ~", s)),
+        ## revpairwise gives incongruent / congruent odds of a correct response
+        contr <- if (grepl("^congruence", s)) "revpairwise" else "pairwise"
+        emm <- emmeans(acc_perf, as.formula(paste(contr, "~", s)),
                        type = "response")
         Compute.OR(emm, label = s)
     })
+
+    if (f3.interaction == TRUE) {
+
+        ## compute sd f3
+        mf <- model.frame(acc_perf)
+        sd_f3 <- sd(mf$f3[!duplicated(mf$SID)])
+
+        ## How big is the frequency effect at -1 SD, mean, and +1 SD of f2?
+        emm_cong_f3 <- emmeans(acc_perf, pairwise ~ congruence | f3,
+                            at = list(f3 = c(-sd_f3, 0, sd_f3)), type = "response")
+
+        emm_cong_freq_f3 <- emmeans(acc_perf, pairwise ~ congruence * frequency | f3,
+                            at = list(f3 = c(-sd_f3, 0, sd_f3)), type = "response")
+
+        ## 1st line is -1SD, second one mean, third one +1SD
+        res_f3_cong <- Compute.OR(emm_cong_f3, label = "frequency | f3 (-1 SD, mean, +1 SD)")
+        res_f3_cong_freq <- Compute.OR(emm_cong_freq_f3, label = "frequency * congruence | f3 (-1 SD, mean, +1 SD)")
+    }
 
     ## For age, OR per 1 SD of log age
     ## If want per 1 log age, just exponentiate the coefficient
@@ -434,8 +539,58 @@ Odds.Ratio.Acc <- function(model) {
         )
     }))
 
-    all_res <- bind_rows(c(res, list(res_age, res_cog)))
-    write_csv(all_res, "./3-Cognitive_Factors_Effect/Outputs/Acc_Odds_Ratios.csv")
+
+    if (f3.interaction == TRUE ) {
+        all_res <- bind_rows(c(res, list(res_f3_cong, res_f3_cong_freq, res_age, res_cog)))
+        fn <- "./3-Cognitive_Factors_Effect/Outputs/f3_Acc_Odds_Ratios.csv"
+    } else {
+        all_res <- bind_rows(c(res, list(res_age, res_cog)))
+        fn <- "./3-Cognitive_Factors_Effect/Outputs/Acc_Odds_Ratios.csv"
+    }
+
+    write_csv(all_res, fn)
+
+    ## Plotting cong * freq * f3 interaction
+    if (f3.interaction == TRUE) {
+        
+        ## participant-level SD and observed range of the centered scale
+        mf <- model.frame(acc_perf)
+        pt <- mf[!duplicated(mf$SID), ]
+        sd_s <- sd(pt$f3)
+        at_list <- setNames(list(seq(min(pt$f3), max(pt$f3), length.out = 60)), "f3")
+
+        ## model-based probabilities (response scale) with 95% CI
+        ## averaged over sex and ethnicity; age at its centered mean (0)
+        pred <- emmeans(acc_perf, ~ f3 * congruence * frequency,at = at_list, type = "response") |>
+                    as.data.frame()
+
+        ## CI column names differ by df method (asymp.* vs lower.CL/upper.CL)
+        names(pred)[names(pred) == lcl] <- "lcl"
+        names(pred)[names(pred) == ucl] <- "ucl"
+
+        freq_labels <- c("equal" = "Equal", "more_cong" = "More congruent")
+
+        p <- ggplot(pred, aes(x = f3, y = prob, colour = congruence, fill = congruence)) +
+                geom_ribbon(aes(ymin = lcl, ymax = ucl), alpha = 0.2, colour = NA) +
+                geom_line(linewidth = 1) +
+                facet_wrap(~ frequency, labeller = labeller(frequency = freq_labels)) +
+                scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+                scale_color_manual(values = c("#C2DDB2FF", "#B74954FF"), name = "Congruence", labels = c("Congruent", "Incongruent")) +
+                scale_fill_manual(values = c("#C2DDB2FF", "#B74954FF"), name = "Congruence", labels = c("Congruent", "Incongruent")) +
+                labs(x = "Learning/Memory factor score (centered)",
+                    y = "Predicted accuracy (%)") +
+                theme_classic() +
+                theme(legend.position = "bottom",
+                        axis.text = element_text(size = 12),
+                        axis.title = element_text(size = 14, face = "bold"),
+                        strip.text.x = element_text(size = 12),
+                        legend.text = element_text(size = 12),
+                        panel.grid.minor = element_blank(),
+                        strip.background = element_rect(fill = "grey95"))
+
+        ggsave("./3-Cognitive_Factors_Effect/Outputs/f3_Acc_Cong_by_Freq_by_f3.pdf", p)
+    }
+
     return(all_res)
 }
 
@@ -466,13 +621,13 @@ Model.RT.RandomSlope <- function(data, cog.data) {
     ## No random slope for frequency bc otherwise does not converge
     ## and as it is always not significant in task performance analysis got rid of this one in priority
     RT_random_slope <- lmer(log_rt ~ congruence * frequency * face_emotion + f1 + f2 + f3 + log_age + sex + ethnicity 
-                    + (1 + congruence + face_emotion | SID),
+                    + (1 + congruence + face_emotion + frequency | SID),
                     data = dat, REML = T)
 
     write_rds(RT_random_slope, "./3-Cognitive_Factors_Effect/Outputs/Suppl_RT_RS_Model_results.rds")
 
     RT_Random_slope_Anova <- afex::mixed(log_rt ~ congruence * frequency * face_emotion + f1 + f2 + f3 + log_age + sex + ethnicity
-                     + (1 + congruence + face_emotion | SID), data = dat, method = "S")
+                     + (1 + congruence + face_emotion + frequency | SID), data = dat, method = "S")
 
     my.ef <- effectsize::eta_squared(RT_Random_slope_Anova$full_model, partial = TRUE) |>
                 dplyr::rename(term = Parameter)
@@ -482,4 +637,44 @@ Model.RT.RandomSlope <- function(data, cog.data) {
                         dplyr::left_join(my.ef, by = "term")
 
     write.csv(results_RT, "./3-Cognitive_Factors_Effect/Outputs/Suppl_RT_RS_Anova_results.csv")
+}
+
+
+Plot.Accuracy.f3 <- function(model) {
+
+    ## participant-level SD and observed range of the centered scale
+    mf   <- model.frame(f3)
+    pt   <- mf[!duplicated(mf$SID), ]
+    sd_s <- sd(pt$f3)
+    at_list <- setNames(list(seq(min(pt$f3), max(pt$f3), length.out = 60)), "f3")
+
+    ## model-based probabilities (response scale) with 95% CI
+    ## averaged over sex and ethnicity; age at its centered mean (0)
+    pred <- emmeans(f3, as.formula(paste("~", "f3", "* congruence * frequency")),
+                    at = at_list, type = "response") |>
+        as.data.frame()
+
+    ## CI column names differ by df method (asymp.* vs lower.CL/upper.CL)
+    names(pred)[names(pred) == lcl] <- "lcl"
+    names(pred)[names(pred) == ucl] <- "ucl"
+
+    freq_labels <- c("equal" = "Equal", "more_cong" = "More congruent")
+
+    p <- ggplot(pred, aes(x = f3, y = prob, colour = congruence, fill = congruence)) +
+            geom_ribbon(aes(ymin = lcl, ymax = ucl), alpha = 0.2, colour = NA) +
+            geom_line(linewidth = 1) +
+            facet_wrap(~ frequency, labeller = labeller(frequency = freq_labels)) +
+            scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+            scale_color_manual(values = c("#C2DDB2FF", "#B74954FF"), name = "Congruence", labels = c("Congruent", "Incongruent")) +
+            scale_fill_manual(values = c("#C2DDB2FF", "#B74954FF"), name = "Congruence", labels = c("Congruent", "Incongruent")) +
+            labs(x = "Learning/Memory factor score (centered)",
+                y = "Predicted accuracy (%)") +
+            theme_classic() +
+            theme(legend.position = "bottom",
+                    axis.text = element_text(size = 12),
+                    axis.title = element_text(size = 14, face = "bold"),
+                    strip.text.x = element_text(size = 12),
+                    legend.text = element_text(size = 12),
+                    panel.grid.minor = element_blank(),
+                    strip.background = element_rect(fill = "grey95"))
 }
