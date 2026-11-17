@@ -11,8 +11,8 @@ Center.Age <- function(d) {
     d |> mutate(log_age = log(age) - mean(log(age[!duplicated(SID)])))
 }
 
-## Function for initial RT model and model assumptions
-Modelling.RT <- function(data) {
+## Helper function to prep the RT data
+Prep.Data.RT <- function(data) {
 
     dat <- read_rds(data) |>
                 ## Keeping only RT for correct trials
@@ -20,6 +20,29 @@ Modelling.RT <- function(data) {
                     ## Centering log age for easier interpretation
                     ## The intercept will now refer to an average-aged participant
                     Center.Age()
+    
+    return(dat)
+}
+
+## Helper function to prep the accuracy data
+Prep.Data.Acc <- function(data) {
+
+    dat <- read_rds(data) |>
+                mutate(correct = case_when(
+                    correct == "correct"   ~ 1,
+                    correct == "incorrect" ~ 0
+                ), .keep = "unused") |>
+                    ## Centering log age for easier interpretation
+                    ## The intercept will now refer to an average-aged participant
+                    Center.Age()
+    
+    return(dat)
+}
+
+## Function for initial RT model and model assumptions
+Modelling.RT <- function(data) {
+
+    dat <- Prep.Data.RT(data)
     
     ## Set contrasts to sum-to-zero coding so that it matches mixed() output later
     options(contrasts = c("contr.sum", "contr.poly"))
@@ -29,7 +52,6 @@ Modelling.RT <- function(data) {
                     + (1 | SID),
                     data = dat, REML = T)
     
-
     cat("\nResiduals are distributed in fan-shape; log-scoring the RT\n")
     ## Compute RT log-scores
     dat$log_rt <- log(dat$reaction_time)
@@ -40,7 +62,6 @@ Modelling.RT <- function(data) {
                     data = dat, REML = T)
 
     write_rds(model2, "./2-Task_Cond_Effect/Outputs/RT_Model_results.rds")
-
 
     ## Residuals are linearly distributed (similar deviations)
     ## Homoskedasticity OK (no funnel plot)
@@ -81,12 +102,7 @@ ANOVA.RT <- function(my.data) {
     my.model <- Modelling.RT(my.data)
 
     ## Reformatting data for mixed() models like in Modelling.RT function
-    dat <- read_rds(my.data) |>
-                ## Keeping only RT for correct trials
-                subset(correct == "correct") |>
-                    ## Centering log age for easier interpretation
-                    ## The intercept will now refer to an average-aged participant
-                    Center.Age()
+    dat <- Prep.Data.RT(data)
 
     ## Compute RT log-scores
     dat$log_rt <- log(dat$reaction_time)
@@ -125,26 +141,23 @@ Plots.RT <- function(model, EST.data) {
     emm_df$lower_ms <- exp(emm_df$asymp.LCL)
     emm_df$upper_ms <- exp(emm_df$asymp.UCL)
 
-    three_way_plot <- ggplot(emm_df, aes(
-                    x = congruence,
-                    y = RT_ms,
-                    color = frequency,
-                    group = frequency
-                )) +
-                geom_point(size = 4) +
-                scale_y_continuous(breaks = seq(800, 1000, by = 25)) +
-                geom_line(linewidth = 1) +
-                geom_errorbar(aes(ymin = lower_ms, ymax = upper_ms), linewidth = 1, width = .1) +
-                facet_wrap(~ face_emotion) +
-                labs(x = "Congruence", y = "Predicted RT (ms)", color = "Frequency") +
-                theme_classic() +
-                theme(axis.text = element_text(size = 12),
-                        axis.title = element_text(size = 14, face = "bold"),
-                        strip.text.x = element_text(size = 12),
-                        legend.text = element_text(size = 12)) +
-                scale_color_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More congruent"))
+    three_way_plot <- ggplot(emm_df, aes(x = congruence, y = RT_ms, color = frequency, group = frequency)) +
+                        geom_point(size = 4) +
+                        scale_y_continuous(breaks = seq(800, 1000, by = 25)) +
+                        geom_line(linewidth = 1) +
+                        geom_errorbar(aes(ymin = lower_ms, ymax = upper_ms), linewidth = 1, width = .1) +
+                        facet_wrap(~ face_emotion) +
+                        labs(x = "Congruence", y = "Predicted RT (ms)", color = "Frequency") +
+                        theme_classic() +
+                        theme(axis.text = element_text(size = 18),
+                                axis.title = element_text(size = 20, face = "bold"),
+                                strip.text.x = element_text(size = 18),
+                                legend.text = element_text(size = 18),
+                                legend.title = element_text(size = 20, face = "bold"),
+                                legend.position = "bottom") +
+                        scale_color_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More congruent"))
    
-    ggsave("./2-Task_Cond_Effect/Outputs/RT_Three_way_interaction.pdf", three_way_plot, width = 8, height = 5)
+    ggsave("./2-Task_Cond_Effect/Outputs/RT_Three_way_interaction.pdf", three_way_plot, width = 7, height = 7)
 
 
     ## ---- Plot predicted RT for age ----
@@ -170,8 +183,8 @@ Plots.RT <- function(model, EST.data) {
             geom_ribbon(aes(ymin = lower_ms, ymax = upper_ms), fill = "#339999", alpha = .2) +
             labs(x = "Age (years)",y = "Predicted RT (ms)") +
             theme_classic() +
-            theme(axis.text = element_text(size = 12),
-                  axis.title = element_text(size = 14, face = "bold"))
+            theme(axis.text = element_text(size = 18),
+                  axis.title = element_text(size = 20, face = "bold"))
     
     ggsave("./2-Task_Cond_Effect/Outputs/RT_Age.pdf", age_plot, width = 8, height = 5)
 }
@@ -256,14 +269,7 @@ Percent.Change.RT <- function(model) {
 ## Function for initial accuracy model and model assumptions
 Modelling.Accuracy <- function(data) {
 
-    dat <- read_rds(data) |>
-                mutate(correct = case_when(
-                    correct == "correct"   ~ 1,
-                    correct == "incorrect" ~ 0
-                ), .keep = "unused") |>
-                    ## Centering log age for easier interpretation
-                    ## The intercept will now refer to an average-aged participant
-                    Center.Age()
+    dat <- Prep.Data.Acc(data)
 
     ## Set contrasts to sum-to-zero coding so that it matches mixed() output later
     ## Age is centered in data prep
@@ -275,7 +281,6 @@ Modelling.Accuracy <- function(data) {
                     data = dat, family = binomial(link = "logit"))
 
     write_rds(accuracy, "./2-Task_Cond_Effect/Outputs/Acc_Model_results.rds")
-
 
     cat("\nChecking assumptions for our Binomial Generalized Linear Mixed Model\n")
 
@@ -318,14 +323,7 @@ LRT.Accuracy <- function(data) {
     Modelling.Accuracy(data)
 
     ## Reformatting data for mixed() models like in Modelling.Accuracy function
-    dat <- read_rds(data) |>
-                mutate(correct = case_when(
-                    correct == "correct"   ~ 1,
-                    correct == "incorrect" ~ 0
-                ), .keep = "unused") |>
-                    ## Centering log age for easier interpretation
-                    ## The intercept will now refer to an average-aged participant
-                    Center.Age()
+    dat <- Prep.Data.Acc(data)
 
     ## re-fit model with afex to get LRT
     ## check_contrast = TRUE will do a sum-to-zero coding for each factor,
@@ -463,12 +461,7 @@ Odds.Ratio.Acc <- function(model) {
 ## To test if results with random intercept only are similar to random slope + intercept
 Model.RT.RandomSlope <- function(data) {
 
-    dat <- read_rds(data) |>
-                ## Keeping only RT for correct trials
-                subset(correct == "correct") |>
-                    ## Centering log age for easier interpretation
-                    ## The intercept will now refer to an average-aged participant
-                    Center.Age()
+    dat <- Prep.Data.RT(data)
     
     ## Set contrasts to sum-to-zero coding so that it matches mixed() output later
     options(contrasts = c("contr.sum", "contr.poly"))
@@ -503,14 +496,7 @@ Model.RT.RandomSlope <- function(data) {
 ## To test if results with random intercept only are similar to random slope + intercept
 Model.Acc.RandomSlope <- function(data) {
 
-     dat <- read_rds(data) |>
-                mutate(correct = case_when(
-                    correct == "correct"   ~ 1,
-                    correct == "incorrect" ~ 0
-                ), .keep = "unused") |>
-                    ## Centering log age for easier interpretation
-                    ## The intercept will now refer to an average-aged participant
-                    Center.Age()
+    dat <- Prep.Data.Acc(data)
 
     ## Set contrasts to sum-to-zero coding so that it matches mixed() output later
     ## Age is centered in data prep
@@ -572,4 +558,126 @@ OR.Acc.Suppl <- function(model_RS) {
     summary(cong_or, type = "response", infer = TRUE)
 
     pairs(cong_or, by = "congruence")
+}
+
+
+## This functions fits and tests the model for the interaction 
+## between age and task effects
+Model.RT.Interaction.Age <- function(data) {
+
+    ## Model fitting part
+    dat <- Prep.Data.RT(data)
+    
+    ## Set contrasts to sum-to-zero coding so that it matches mixed() output later
+    options(contrasts = c("contr.sum", "contr.poly"))
+
+    dat$log_rt <- log(dat$reaction_time)
+
+    rt_age <- lmer(log_rt ~ congruence * frequency * face_emotion * log_age + sex + ethnicity 
+                    + (1 | SID),
+                    data = dat, REML = T)
+
+    write_rds(rt_age, "./2-Task_Cond_Effect/Outputs/Age_RT_Model_results.rds")
+
+    ## ANOVA part
+    RT_Anova <- afex::mixed(log_rt ~ congruence * frequency * face_emotion * log_age + sex + ethnicity
+                     + (1 | SID), data = dat, method = "S")
+
+    my.ef <- effectsize::eta_squared(RT_Anova$full_model, partial = TRUE) |>
+                dplyr::rename(term = Parameter)
+
+    results_RT <- afex::nice(RT_Anova) |>
+                    dplyr::rename(term = Effect) |>
+                        dplyr::left_join(my.ef, by = "term")
+
+    write.csv(results_RT, "./2-Task_Cond_Effect/Outputs/Age_RT_Anova_results.csv")
+
+    ## no follow up or plot because no results significant
+}
+
+
+Model.Acc.Interaction.Age <- function(data) {
+
+    dat <- Prep.Data.Acc(data)
+
+    ## Set contrasts to sum-to-zero coding so that it matches mixed() output later
+    ## Age is centered in data prep
+    options(contrasts = c("contr.sum", "contr.poly"))
+
+    accuracy_age <- glmer(correct ~ congruence * frequency * face_emotion * log_age + sex + ethnicity
+                    + (1 | SID),
+                    data = dat, family = binomial(link = "logit"))
+
+    write_rds(accuracy_age, "./2-Task_Cond_Effect/Outputs/Age_Acc_Model_results.rds")
+
+    ## Calls function for initial model and assumptions
+    Modelling.Accuracy(data)
+
+    ## re-fit model with afex to get LRT
+    ## check_contrast = TRUE will do a sum-to-zero coding for each factor,
+    ## i.e., each factor's coefficients are deviations from the grand mean (e.g., congruent = +1, incongruent = -1)
+    ## rather than tratment coding (R default; e.g., congruent = 0, incongruent = 1)
+    ## However, it only affects factors, so we still need to center age (continuous variable)
+    accuracy_LRT <- afex::mixed(correct ~ congruence * frequency * face_emotion * log_age + sex + ethnicity
+                     + (1 | SID), family = binomial(), data = dat, check_contrasts = TRUE, method = "LRT")
+
+    ## Likelihood ratio test chi square, one row per model term
+    ## Each test compares the full model against one with that term's column removed (Type 3)
+    ## A factor with 3+ levels gets a single omnibus test here, rather than several coefficient rows
+    print(accuracy_LRT)
+    write_rds(accuracy_LRT, "./2-Task_Cond_Effect/Outputs/Age_Acc_LRT_results.rds")
+
+    result_accuracy <- afex::nice(accuracy_LRT)
+    write_csv(result_accuracy, "./2-Task_Cond_Effect/Outputs/Age_Acc_LRT_results.csv")
+
+    ## Odds ratio part
+    ## compute sd age
+    mf <- model.frame(accuracy_age)
+    sd_age <- sd(mf$log_age[!duplicated(mf$SID)])
+
+    ## How big is the frequency effect at -1 SD, mean, and +1 SD of age?
+    emm_freq_age <- emmeans(accuracy_age, pairwise ~ frequency | log_age,
+                            at = list(log_age = c(-sd_age, 0, sd_age)), type = "response")
+
+    ## 1st line is -1SD, second one mean, third one +1SD
+    res_freq_age <- Compute.OR(emm_freq_age, label = "frequency | log age (-1 SD, mean, +1 SD)")
+    write_csv(res_freq_age, "./2-Task_Cond_Effect/Outputs/Age_Acc_OR_results.csv")
+}
+
+
+Plot.Accuracy.Age <- function(EST.data, model.acc.age) {
+
+    EST <- read_rds(EST.data)
+    ## Same centering constant as Center.Age() used when fitting the model
+    age_center <- mean(log(EST$age[!duplicated(EST$SID)]))
+
+    ## Grid of ages across the observed range (centered log age is what the model uses)
+    ages <- seq(min(EST$age), max(EST$age), length.out = 100)
+    log_age <- log(ages) - age_center
+
+    acc_perf <- read_rds(model.acc.age)
+
+    ## Predicted probability of a correct response by age, averaged over other factors
+    ## type = "response" back-transforms from log-odds to probability
+    emm_age <- emmeans(acc_perf, ~ frequency | log_age, at = list(log_age = log_age), type = "response")
+    ## columns: log_age, prob, SE, df, asymp.LCL, asymp.UCL
+    pred_age <- as.data.frame(emm_age)
+
+    ## Back to age in years
+    pred_age$age <- exp(pred_age$log_age + age_center)
+
+    freq_age <- ggplot(pred_age, aes(x = age, y = prob * 100, colour = frequency, fill = frequency)) + 
+                geom_line(linewidth = 0.8) +
+                geom_ribbon(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100), alpha = .2, colour = NA) +
+                labs(x = "Age (years)", y = "Predicted accuracy (%)") +
+                theme_classic() +
+                theme(axis.text = element_text(size = 18),
+                        axis.title = element_text(size = 20, face = "bold"),
+                        legend.text = element_text(size = 18),
+                        legend.title = element_text(size = 20, face = "bold"),
+                        legend.position = "bottom") +
+                scale_color_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More congruent")) +
+                scale_fill_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More congruent"))
+    
+    ggsave("./2-Task_Cond_Effect/Outputs/Age_Acc_Freq.pdf", freq_age, width = 7, height = 6)
 }

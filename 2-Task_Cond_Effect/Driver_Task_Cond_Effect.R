@@ -21,6 +21,7 @@
     model.rt = "./2-Task_Cond_Effect/Outputs/RT_Model_results.rds"
     model.acc = "./2-Task_Cond_Effect/Outputs/Acc_Model_results.rds"
     model.acc.rs = "./2-Task_Cond_Effect/Outputs/Suppl_Acc_RS_Model_results.rds"
+    model.acc.age = "./2-Task_Cond_Effect/Outputs/Age_Acc_Model_results.rds"
 
 ## Main analysis
     ANOVA.RT(data.all)
@@ -34,3 +35,5 @@
     Model.RT.RandomSlope(data.all)
     Model.Acc.RandomSlope(data.all)
     OR.Acc.Suppl(model.acc.rs)
+    Model.Acc.Interaction.Age(data.all)
+    Plot.Accuracy.Age(data.all, model.acc.age)
