@@ -37,3 +37,5 @@
     OR.Acc.Suppl(model.acc.rs)
     Model.Acc.Interaction.Age(data.all)
     Plot.Accuracy.Age(data.all, model.acc.age)
+    Model.RT.Interaction.Sex(data.all)
+    Model.Acc.Interaction.Sex(data.all)

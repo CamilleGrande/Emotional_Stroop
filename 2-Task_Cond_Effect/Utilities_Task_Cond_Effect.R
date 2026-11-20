@@ -152,6 +152,8 @@ Plots.RT <- function(model, EST.data) {
                         theme(axis.text = element_text(size = 18),
                                 axis.title = element_text(size = 20, face = "bold"),
                                 strip.text.x = element_text(size = 18),
+                                panel.grid.minor = element_blank(),
+                                strip.background = element_rect(fill = "grey95"),
                                 legend.text = element_text(size = 18),
                                 legend.title = element_text(size = 20, face = "bold"),
                                 legend.position = "bottom") +
@@ -179,7 +181,7 @@ Plots.RT <- function(model, EST.data) {
     pred_age$upper_ms <- exp(pred_age$conf.high)
 
     age_plot <- ggplot(pred_age, aes(age, RT_ms)) +
-            geom_line(colour = "#339999") +
+            geom_line(colour = "#339999", linewidth = 1) +
             geom_ribbon(aes(ymin = lower_ms, ymax = upper_ms), fill = "#339999", alpha = .2) +
             labs(x = "Age (years)",y = "Predicted RT (ms)") +
             theme_classic() +
@@ -361,8 +363,8 @@ Plots.Accuracy <- function(model, EST.data) {
                           linewidth = 1, width = .1) +
             labs(x = "Congruence", y = "Predicted accuracy (%)") +
             theme_classic() +
-            theme(axis.text = element_text(size = 12),
-                  axis.title = element_text(size = 14, face = "bold"))
+            theme(axis.text = element_text(size = 18),
+                  axis.title = element_text(size = 20, face = "bold"))
 
     ggsave("./2-Task_Cond_Effect/Outputs/Acc_Congruence.pdf", cong_acc, width = 5, height = 5)
 
@@ -387,12 +389,12 @@ Plots.Accuracy <- function(model, EST.data) {
     pred_age$age <- exp(pred_age$log_age + age_center)
 
     age_plot <- ggplot(pred_age, aes(age, prob * 100)) +
-            geom_line(colour = "#339999") +
+            geom_line(colour = "#339999", linewidth = 1) +
             geom_ribbon(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100), fill = "#339999", alpha = .2) +
             labs(x = "Age (years)", y = "Predicted accuracy (%)") +
             theme_classic() +
-            theme(axis.text = element_text(size = 12),
-                  axis.title = element_text(size = 14, face = "bold"))
+            theme(axis.text = element_text(size = 18),
+                  axis.title = element_text(size = 20, face = "bold"))
 
     ggsave("./2-Task_Cond_Effect/Outputs/Acc_Age.pdf", age_plot, width = 6, height = 4)
 }
@@ -526,26 +528,26 @@ Model.Acc.RandomSlope <- function(data) {
     emm <- emmeans(accuracy_random_slope, ~ congruence * frequency * face_emotion, type = "response")
     emm_df <- as.data.frame(emm)
 
-    cong_acc <- ggplot(emm_df, aes(
-                        x = congruence, 
-                        y = prob * 100,
-                        color = frequency,
-                        group = frequency)) +
-            geom_point(size = 4) +
-            geom_line(linewidth = 1) +
-            geom_errorbar(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100),
-                          linewidth = 1, width = .1) +
-            facet_wrap(~ face_emotion) +
-                ylab("Predicted RT (ms)") +
-                labs(x = "Congruence", y = "Predicted accuracy (%)", color = "Frequency") +
-            theme_classic() +
-            theme(axis.text = element_text(size = 12),
-                  axis.title = element_text(size = 14, face = "bold"),
-                        strip.text.x = element_text(size = 12),
-                        legend.text = element_text(size = 12)) +
-            scale_color_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More congruent"))
+    cong_acc <- ggplot(emm_df, aes(x = congruence, y = prob * 100, color = frequency, group = frequency)) +
+                    geom_point(size = 4) +
+                    geom_line(linewidth = 1) +
+                    geom_errorbar(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100),
+                                linewidth = 1, width = .1) +
+                    facet_wrap(~ face_emotion) +
+                        ylab("Predicted RT (ms)") +
+                        labs(x = "Congruence", y = "Predicted accuracy (%)", color = "Frequency") +
+                    theme_classic() +
+                    theme(legend.position = "bottom",
+                            axis.text = element_text(size = 18),
+                            axis.title = element_text(size = 20, face = "bold"),
+                            strip.text.x = element_text(size = 20),
+                            legend.text = element_text(size = 18),
+                            legend.title = element_text(size = 20, face = "bold"),
+                            panel.grid.minor = element_blank(),
+                            strip.background = element_rect(fill = "grey95")) +
+                    scale_color_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More congruent"))
 
-    ggsave("./2-Task_Cond_Effect/Outputs/Suppl_Acc_Congruence.pdf", cong_acc, width = 8, height = 8)
+    ggsave("./2-Task_Cond_Effect/Outputs/Suppl_Acc_Congruence.pdf", cong_acc, width = 7, height = 7)
 }
 
 OR.Acc.Suppl <- function(model_RS) {
@@ -667,7 +669,7 @@ Plot.Accuracy.Age <- function(EST.data, model.acc.age) {
     pred_age$age <- exp(pred_age$log_age + age_center)
 
     freq_age <- ggplot(pred_age, aes(x = age, y = prob * 100, colour = frequency, fill = frequency)) + 
-                geom_line(linewidth = 0.8) +
+                geom_line(linewidth = 1) +
                 geom_ribbon(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100), alpha = .2, colour = NA) +
                 labs(x = "Age (years)", y = "Predicted accuracy (%)") +
                 theme_classic() +
@@ -676,8 +678,120 @@ Plot.Accuracy.Age <- function(EST.data, model.acc.age) {
                         legend.text = element_text(size = 18),
                         legend.title = element_text(size = 20, face = "bold"),
                         legend.position = "bottom") +
-                scale_color_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More congruent")) +
-                scale_fill_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More congruent"))
+                scale_color_manual(values = c("#E3C454FF", "#A27CBAFF"), name = "Frequency", labels = c("Equal", "More congruent")) +
+                scale_fill_manual(values = c("#E3C454FF", "#A27CBAFF"), name = "Frequency", labels = c("Equal", "More congruent"))
     
     ggsave("./2-Task_Cond_Effect/Outputs/Age_Acc_Freq.pdf", freq_age, width = 7, height = 6)
+}
+
+
+Model.RT.Interaction.Sex <- function(data) {
+
+    ## Model fitting part
+    dat <- Prep.Data.RT(data)
+    
+    ## Set contrasts to sum-to-zero coding so that it matches mixed() output later
+    options(contrasts = c("contr.sum", "contr.poly"))
+
+    dat$log_rt <- log(dat$reaction_time)
+
+    rt_sex <- lmer(log_rt ~ congruence * frequency * face_emotion * sex + log_age + ethnicity 
+                    + (1 | SID),
+                    data = dat, REML = T)
+
+    write_rds(rt_sex, "./2-Task_Cond_Effect/Outputs/Sex_RT_Model_results.rds")
+
+    ## ANOVA part
+    RT_Anova <- afex::mixed(log_rt ~ congruence * frequency * face_emotion * sex + log_age + ethnicity
+                     + (1 | SID), data = dat, method = "S")
+
+    my.ef <- effectsize::eta_squared(RT_Anova$full_model, partial = TRUE) |>
+                dplyr::rename(term = Parameter)
+
+    results_RT <- afex::nice(RT_Anova) |>
+                    dplyr::rename(term = Effect) |>
+                        dplyr::left_join(my.ef, by = "term")
+
+    write.csv(results_RT, "./2-Task_Cond_Effect/Outputs/Sex_RT_Anova_results.csv")
+
+    ## % change part
+    emm_options(lmer.df = "asymptotic")
+    emm <- emmeans(rt_sex, pairwise ~ face_emotion | sex, tran = "log", type = "response")
+
+    cat("\nRT EMM result face emotion | sex:\n")
+    print(emm)
+
+    ci <- Compute.CI(emm, label = s)
+    write.csv(ci, "./2-Task_Cond_Effect/Outputs/Sex_RT_Percent_Change.csv")
+
+    ## Plot sex * face emotion interaction
+    ## Save as df for plotting, otherwise won't work
+    emm_df <- as.data.frame(emm$emmeans)
+
+    p_sex_emo <- ggplot(emm_df, aes(x = face_emotion, y = response, color = sex, group = sex)) +
+                        geom_point(size = 4) +
+                        scale_y_continuous(breaks = seq(700, 1100, by = 25)) +
+                        geom_line(linewidth = 1) +
+                        geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), linewidth = 1, width = .1) +
+                        labs(x = "Face emotion", y = "Predicted RT (ms)", color = "Sex") +
+                        theme_classic() +
+                        theme(axis.text = element_text(size = 18),
+                                axis.title = element_text(size = 20, face = "bold"),
+                                legend.text = element_text(size = 18),
+                                legend.title = element_text(size = 20, face = "bold"),
+                                legend.position = "bottom") +
+                        scale_color_manual(values = c("#A27CBAFF", "#E3C454FF"), labels = c("Female", "Male"))
+   
+    ggsave("./2-Task_Cond_Effect/Outputs/Sex_RT_Face_emotion.pdf", p_sex_emo, width = 7, height = 7)
+}
+
+
+Model.Acc.Interaction.Sex <- function(data) { 
+
+    ## Accuracy * sex interaction (no need for followup?)
+    ## dat already has log age??
+    dat <- Prep.Data.Acc("./0-Data_Prep/Outputs/Tidy_all.rds")
+    options(contrasts = c("contr.sum", "contr.poly"))
+
+    acc_sex <- glmer(correct ~ congruence * frequency * face_emotion * sex + log_age + ethnicity
+                     + (1 | SID),
+                     data = dat, family = binomial(link = "logit"))
+    write_rds(acc_sex, "./2-Task_Cond_Effect/Outputs/Sex_Acc_Model_results.rds")
+
+    LRT_sex <- afex::mixed(correct ~ congruence * frequency * face_emotion * sex + log_age + ethnicity
+                      + (1 | SID), family = binomial(), data = dat, check_contrasts = TRUE, method = "LRT")
+
+    print(LRT_sex)
+    result_accuracy <- afex::nice(LRT_sex)
+    write_csv(result_accuracy, "./2-Task_Cond_Effect/Outputs/Sex_Acc_LRT_results.csv")
+
+    emm <- emmeans(acc_sex, pairwise ~ face_emotion | frequency * sex, type = "response")
+
+    cat("\nAccuracy EMM result sex | frequency * face emotion:\n")
+    print(emm)
+
+    or <- Compute.OR(emm, label = "face_emotion | frequency * sex")
+    write.csv(or, "./2-Task_Cond_Effect/Outputs/Sex_Acc_OR.csv")
+
+    emm_df <- as.data.frame(emm$emmeans)
+
+    p_sex_acc <- ggplot(emm_df, aes(x = face_emotion, y = prob * 100, color = frequency, group = frequency)) +
+                    geom_point(size = 4) +
+                    geom_line(linewidth = 1) +
+                    geom_errorbar(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100),
+                                linewidth = 1, width = .1) +
+                    facet_wrap(~ sex) +
+                        labs(x = "Face emotion", y = "Predicted accuracy (%)", color = "Frequency") +
+                    theme_classic() +
+                    theme(legend.position = "bottom",
+                            axis.text = element_text(size = 18),
+                            axis.title = element_text(size = 20, face = "bold"),
+                            strip.text.x = element_text(size = 20),
+                            legend.text = element_text(size = 18),
+                            legend.title = element_text(size = 20, face = "bold"),
+                            panel.grid.minor = element_blank(),
+                            strip.background = element_rect(fill = "grey95")) +
+                    scale_color_manual(values = c("#E3C454FF", "#A27CBAFF"), labels = c("Equal", "More congruent"))
+
+    ggsave("./2-Task_Cond_Effect/Outputs/Sex_Acc_Freq_Face_emotion.pdf", p_sex_acc, width = 7, height = 8)
 }
