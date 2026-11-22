@@ -1,5 +1,5 @@
 ## Utilities_CFA.R
-## Author: Camille Grandé
+## Author: Camille Grandé (adapted from a previous TAY study)
 ## Description:
 ##      This script holds the utility functions to run the cognition CFA analysis in the TAY sample
 
@@ -24,7 +24,7 @@ CFA.Analysis <- function(cog.data) {
     sum(is.na(tay_pca_full$RAVLT_Total))
     varTable(tay_pca_full[, efa_vars])
 
-    #Specifiy and run CFA Model for three factor structure consisting of Verbal Ability, Executive Functioning and Learning/Memory# - Note that Matrix cross loads onto F1 and F2# 
+    #Specifiy and run CFA Model for three factor structure consisting of Verbal Ability, Executive Functioning and Learning/Memory# - Note that Matrix cross loads onto F1 and F3# 
     model_3factor <- '
         f1 =~ NIH_Picture_Vocab + NIH_Reading_Recog + MATRICES
         f2 =~ NIH_Flanker + NIH_Card_Sort + NIH_Pattern_Comp + LMT_Efficiency
