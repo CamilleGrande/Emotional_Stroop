@@ -3,6 +3,9 @@
 ## Description:
 ##      This script runs the descriptives stats for the emotional stroop task analysis
 
+## Wipe and recreate the Outputs folder so old files don't interfere with this run
+    unlink("./1-Descriptives/Outputs", recursive = TRUE)
+    dir.create("./1-Descriptives/Outputs", recursive = TRUE)
 
 ## Libraries needed to run the script
     library(tidyverse)
