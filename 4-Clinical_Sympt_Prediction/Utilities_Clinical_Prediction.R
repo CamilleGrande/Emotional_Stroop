@@ -4,6 +4,31 @@
 ##      This script holds the utility function to run the task performance prediction
 ##      using clinical metrics
 
+## --- Helper functions ---
+
+## Helper function to prep the RT data
+Prep.EST.RT <- function(data) {
+    
+    EST <- read_rds(data) |>
+                ## Keeping only RT for correct trials
+                subset(correct == "correct") |>
+                    ## Log-scoring RT (fan-shaped residuals on the raw scale)
+                    mutate(log_rt = log(reaction_time))
+
+    return(EST)
+}
+
+## Helper function to prep the accuracy data
+Prep.EST.Acc <- function(data) {
+
+    EST <- read_rds(data) |>
+                mutate(correct = case_when(
+                        correct == "correct"   ~ 1,
+                        correct == "incorrect" ~ 0
+                ), .keep = "unused")
+    
+    return(EST)
+}
 
 ## Helper function to create one big summary of our models
 ## and FDR correct p values across scales being tested for each outcome
@@ -13,22 +38,21 @@ Create.Summary.Models <- function(list.models) {
 
     predictors <- "cssrs_attempt_lt\\d*|anxdepr_t|withdrdepr_t|somatic_t|thought_t|attention_t|aggressive_t|rulebreaking_t"
 
-    results <- imap_dfr(
-                list.models, ~ tidy(.x, effects = "fixed") |>
+    results <- imap_dfr(list.models, ~ tidy(.x, effects = "fixed") |>
                     mutate(model = .y) |>
                         relocate(model)
                 ) |>
-        mutate(is_predictor = str_detect(term, predictors),
-               ## label the effect without the predictor name, so the same effect matches across models
-               effect = str_remove(term, predictors)) |>
-        group_by(effect) |>
-        ## Adjusting with FDR across the 8 models (clinical constructs are correlated)
-        mutate(p_fdr = ifelse(is_predictor, p.adjust(p.value, "fdr"), NA)) |>
-        ungroup()
+                    mutate(is_predictor = str_detect(term, predictors),
+                        ## label the effect without the predictor name, so the same effect matches across models
+                        effect = str_remove(term, predictors)
+                    ) |>
+                        group_by(effect) |>
+                            ## Adjusting with FDR across the 8 models (clinical constructs are correlated)
+                            mutate(p_fdr = ifelse(is_predictor, p.adjust(p.value, "fdr"), NA)) |>
+                                ungroup()
 
     return(results)
 }
-
 
 ## Helper function to center log age for each population
 ## It centers based on unique SID, not for each row
@@ -37,7 +61,6 @@ Create.Summary.Models <- function(list.models) {
 Center.Age <- function(d) {
     d |> mutate(log_age = log(age) - mean(log(age[!duplicated(SID)])))
 }
-
 
 ## Centers clinical scales at the participant level (one value per SID)
 ## like with age
@@ -51,10 +74,11 @@ Center.Clinical <- function(d) {
         distinct(SID, across(all_of(clinical_vars))) |>
         summarise(across(all_of(clinical_vars), \(x) mean(x, na.rm = TRUE)))
 
-    d |>
+    centered_scales <- d |>
         mutate(across(all_of(clinical_vars), \(x) x - means[[cur_column()]]))
-}
 
+    return(centered_scales)
+}
 
 ## This function computes the confidence intervals for our ratios
 ## to get CI for percent faster/slower RT
@@ -77,7 +101,6 @@ Compute.CI <- function(my.emm, label) {
     return(clean_ci)
 }
 
-
 ## OR computation for suicide attempt (binomial)
 Suicide.OR <- function(model, contr, spec) {
 
@@ -87,7 +110,6 @@ Suicide.OR <- function(model, contr, spec) {
     print(emm)
     return(OR)
 }
-
 
 ## OR computation for clinical scales (continuous)
 Clinical.OR <- function(model, spec, baseline = FALSE) {
@@ -101,16 +123,13 @@ Clinical.OR <- function(model, spec, baseline = FALSE) {
     if (baseline == FALSE) {
 
         ## How big is the congruency/face emotion/ congruency per face emotion effect at -1 SD, mean, and +1 SD of scale?
-        emm_cong <- emmeans(model, as.formula(paste("revpairwise ~ congruence | ", spec)),
-                            at = at_list, type = "response")
+        emm_cong <- emmeans(model, as.formula(paste("revpairwise ~ congruence | ", spec)), at = at_list, type = "response")
         print(emm_cong)
         
-        emm_emo <- emmeans(model, as.formula(paste("revpairwise ~ face_emotion | ", spec)),
-                            at = at_list, type = "response")
+        emm_emo <- emmeans(model, as.formula(paste("revpairwise ~ face_emotion | ", spec)), at = at_list, type = "response")
         print(emm_emo)
 
-        emm_cong_emo <- emmeans(model, as.formula(paste("revpairwise ~ congruence | face_emotion * ", spec)),
-                            at = at_list, type = "response")
+        emm_cong_emo <- emmeans(model, as.formula(paste("revpairwise ~ congruence | face_emotion * ", spec)), at = at_list, type = "response")
         print(emm_cong_emo)
 
         ## 1st line is -1SD, second one mean, third one +1SD
@@ -123,8 +142,7 @@ Clinical.OR <- function(model, spec, baseline = FALSE) {
 
     if (baseline == TRUE) {
 
-        emm_baseline <- emmeans(model, as.formula(paste("revpairwise ~ ", spec)),
-                            at = at_list, type = "response")
+        emm_baseline <- emmeans(model, as.formula(paste("revpairwise ~ ", spec)), at = at_list, type = "response")
         print(emm_baseline)
 
         all_res <- Compute.OR(emm_baseline, label = paste0(spec, ", (-1 SD, mean, +1 SD)"))
@@ -132,7 +150,6 @@ Clinical.OR <- function(model, spec, baseline = FALSE) {
     
     return(all_res)
 }
-
 
 ## Computes the % change for +1 SD for each scale
 Percent.Change.per.SD <- function(model, spec, by = NULL) {
@@ -148,15 +165,12 @@ Percent.Change.per.SD <- function(model, spec, by = NULL) {
 
     rhs <- if (is.null(by)) spec else paste(spec, "|", paste(by, collapse = " * "))
 
-    emm <- emmeans(model, as.formula(paste("revpairwise ~", rhs)),
-                   at = at_list, tran = "log", type = "response")
+    emm <- emmeans(model, as.formula(paste("revpairwise ~", rhs)), at = at_list, tran = "log", type = "response")
 
-    label <- paste0(spec, if (!is.null(by)) paste0(" | ", paste(by, collapse = " * ")),
-                    " (+1 SD vs mean)")
+    label <- paste0(spec, if (!is.null(by)) paste0(" | ", paste(by, collapse = " * ")), " (+1 SD vs mean)")
 
     return(Compute.CI(emm, label = label))
 }
-
 
 ## Computes odds ratios + CIs from emmeans contrasts (binomial GLMM)
 Compute.OR <- function(my.emm, label) {
@@ -173,26 +187,22 @@ Compute.OR <- function(my.emm, label) {
     return(ci[, setdiff(names(ci), c("SE", "df", "null", "z.ratio", "p.value", "odds.ratio", lcl, ucl))])
 }
 
+## --- Core analysis functions ---
+
 ## Runs the analysis for the models on interference effect, face emotion effect
 ## and their interaction for RT
 Interference.FaceEmotion.RT <- function(EST.data, clinical.data, suicide.data) {
 
-    EST <- read_rds(EST.data) |>
-                ## Keeping only RT for correct trials
-                subset(correct == "correct") 
-    
-    EST$log_rt <- log(EST$reaction_time)
-    
+    EST <- Prep.EST.RT(EST.data)   
     clinical <- read_rds(clinical.data)
-
     suicide <- read_rds(suicide.data)
 
     ## Set contrasts to sum-to-zero coding
     ## Age is centered in data prep
     options(contrasts = c("contr.sum", "contr.poly"))
-
     emm_options(lmer.df = "asymptotic")
 
+    cat("\n--- Computing Congruence by Face emotion interaction on RT... ---\n")
     ## ----- Suicide analysis -----
     ## don't bind all 3 (EST, clinical, suicide) together bc would loose a lot of suicide data
     ## EST + clinical: n = 699
@@ -203,9 +213,9 @@ Interference.FaceEmotion.RT <- function(EST.data, clinical.data, suicide.data) {
                         ## The intercept will now refer to an average-aged participant
                         Center.Age()
 
+    cat("\nfor suicide...\n")
     model_suicide <- lmer(log_rt ~ congruence * face_emotion * cssrs_attempt_lt + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_suicide, REML = T)
+                        + (1 | SID), data = dat_suicide, REML = T)
 
     ## Get RT difference between no history of pior SA and history of prior SA
     ## to get ratio (diff RT btw the two): exp(response0 - response1)
@@ -226,34 +236,28 @@ Interference.FaceEmotion.RT <- function(EST.data, clinical.data, suicide.data) {
                             ## Negative values = low t-score; positive values = high t-score
                             Center.Clinical()
 
+    cat("\nfor clinical scales\n")
     ## Fitting all models first
     model_anxdepr <- lmer(log_rt ~ congruence * face_emotion * anxdepr_t + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_clinical, REML = T)
+                    + (1 | SID), data = dat_clinical, REML = T)
 
     model_withdrdepr <- lmer(log_rt ~ congruence * face_emotion * withdrdepr_t + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_clinical, REML = T)
+                    + (1 | SID), data = dat_clinical, REML = T)
 
     model_somatic <- lmer(log_rt ~ congruence * face_emotion * somatic_t + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_clinical, REML = T)
+                    + (1 | SID), data = dat_clinical, REML = T)
 
     model_thought <- lmer(log_rt ~ congruence * face_emotion * thought_t + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_clinical, REML = T)
+                    + (1 | SID), data = dat_clinical, REML = T)
     
     model_attention <- lmer(log_rt ~ congruence * face_emotion * attention_t + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_clinical, REML = T)
+                    + (1 | SID), data = dat_clinical, REML = T)
 
     model_aggressive <- lmer(log_rt ~ congruence * face_emotion * aggressive_t + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_clinical, REML = T)
+                    + (1 | SID), data = dat_clinical, REML = T)
 
     model_rulebreaking <- lmer(log_rt ~ congruence * face_emotion * rulebreaking_t + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_clinical, REML = T)
+                    + (1 | SID), data = dat_clinical, REML = T)
 
 
     ## % change for each model
@@ -314,25 +318,19 @@ Interference.FaceEmotion.RT <- function(EST.data, clinical.data, suicide.data) {
     write_csv(all_pct_change, "./4-Clinical_Sympt_Prediction/Outputs/RT_Interference-FaceEmotion_Pct_Change.csv")
 }
 
-
 ## Runs the analysis for the models on interference effect, face emotion effect
 ## and their interaction for accuracy
 Interference.FaceEmotion.Accuracy <- function(EST.data, clinical.data, suicide.data) {
 
-    EST <- read_rds(EST.data) |>
-                    mutate(correct = case_when(
-                        correct == "correct"   ~ 1,
-                        correct == "incorrect" ~ 0
-                    ), .keep = "unused")
-
+    EST <- Prep.EST.Acc(EST.data)
     clinical <- read_rds(clinical.data)
-
     suicide <- read_rds(suicide.data)
 
     ## Set contrasts to sum-to-zero coding
     ## Age is centered in data prep
     options(contrasts = c("contr.sum", "contr.poly"))
 
+    cat("\n--- Computing Congruence by Face emotion interaction on Accuracy... ---\n")
     ## ----- Suicide analysis -----
     ## don't bind all 3 (EST, clinical, suicide) together bc would loose a lot of suicide data
     ## EST + clinical: n = 699
@@ -343,9 +341,9 @@ Interference.FaceEmotion.Accuracy <- function(EST.data, clinical.data, suicide.d
                         ## The intercept will now refer to an average-aged participant
                         Center.Age()
     
+    cat("\nfor suicide...\n")
     model_suicide <- glmer(correct ~ congruence * face_emotion * cssrs_attempt_lt + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_suicide, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_suicide, family = binomial(link = "logit"))
 
     ## OR for each outcome
     res_sui_cong <- Suicide.OR(model_suicide, "revpairwise", "congruence | cssrs_attempt_lt")
@@ -360,34 +358,29 @@ Interference.FaceEmotion.Accuracy <- function(EST.data, clinical.data, suicide.d
                             ## Centering clinical scales for easier interpretation based on the sample mean
                             ## Negative values = low t-score; positive values = high t-score
                             Center.Clinical()
+    
+    cat("\nfor clinical scales...\n")
 
     model_anxdepr <- glmer(correct ~ congruence * face_emotion * anxdepr_t + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_clinical, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_clinical, family = binomial(link = "logit"))
 
     model_withdrdepr <- glmer(correct ~ congruence * face_emotion * withdrdepr_t + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_clinical, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_clinical, family = binomial(link = "logit"))
 
     model_somatic <- glmer(correct ~ congruence * face_emotion * somatic_t + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_clinical, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_clinical, family = binomial(link = "logit"))
 
     model_thought <- glmer(correct ~ congruence * face_emotion * thought_t + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_clinical, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_clinical, family = binomial(link = "logit"))
 
     model_attention <- glmer(correct ~ congruence * face_emotion * attention_t + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_clinical, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_clinical, family = binomial(link = "logit"))
 
     model_aggressive <- glmer(correct ~ congruence * face_emotion * aggressive_t + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_clinical, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_clinical, family = binomial(link = "logit"))
     
     model_rulebreaking <- glmer(correct ~ congruence * face_emotion * rulebreaking_t + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_clinical, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_clinical, family = binomial(link = "logit"))
 
     ## OR for each model
     res_anxdep <- Clinical.OR(model_anxdepr, "anxdepr_t")
@@ -434,12 +427,13 @@ Interference.FaceEmotion.Accuracy <- function(EST.data, clinical.data, suicide.d
     p3 <- Plot.Accuracy.by.Scale(model_attention, "attention_t", "Attention problems") + no_y
     
     final_p <- (p1 | p2 | p3) + 
-                plot_annotation(tag_levels = "A") + 
+                plot_annotation(tag_levels = "A") +
                 plot_layout(guides = "collect") &
                 coord_cartesian(ylim = y_lim) &
-                theme(legend.position = "bottom")
+                theme(legend.position = "bottom") &
+                theme(plot.tag = element_text(size = 18))
 
-    ggsave("./4-Clinical_Sympt_Prediction/Outputs/Acc_all_by_cong_emotion.pdf", final_p, width = 15)
+    ggsave("./4-Clinical_Sympt_Prediction/Outputs/Acc_all_by_cong_emotion.pdf", final_p, width = 19)
 }
 
 
@@ -447,16 +441,10 @@ Interference.FaceEmotion.Accuracy <- function(EST.data, clinical.data, suicide.d
 ## for RT
 Congruent.RT <- function(EST.data, clinical.data, suicide.data) {
 
-    EST <- read_rds(EST.data) |>
-                    ## Keeping only congruent trials
-                    subset(congruence == "congruent") |>
-                        ## Keeping only RT for correct trials
-                        subset(correct == "correct") 
-
-    EST$log_rt <- log(EST$reaction_time)
-    
+    EST <- Prep.EST.RT(EST.data) |>
+                ## Keeping only congruent trials
+                subset(congruence == "congruent")
     clinical <- read_rds(clinical.data)
-
     suicide <- read_rds(suicide.data)
 
     ## Set contrasts to sum-to-zero coding
@@ -465,6 +453,7 @@ Congruent.RT <- function(EST.data, clinical.data, suicide.data) {
 
     emm_options(lmer.df = "asymptotic")
 
+    cat("\n--- Computing baseline effect on RT... ---\n")
     ## ----- Suicide analysis -----
     ## don't bind all 3 (EST, clinical, suicide) together bc would loose a lot of suicide data
     ## EST + clinical: n = 699
@@ -475,9 +464,9 @@ Congruent.RT <- function(EST.data, clinical.data, suicide.data) {
                         ## The intercept will now refer to an average-aged participant
                         Center.Age()
 
+    cat("\nfor suicide...\n")
     model_suicide <- lmer(log_rt ~ cssrs_attempt_lt + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_suicide, REML = T)
+                    + (1 | SID), data = dat_suicide, REML = T)
     
     ## Get RT difference between no history of pior SA and history of prior SA
     ## to get ratio (diff RT btw the two): exp(response0 - response1)
@@ -493,35 +482,29 @@ Congruent.RT <- function(EST.data, clinical.data, suicide.data) {
                             ## Centering clinical scales for easier interpretation based on the sample mean
                             ## Negative values = low t-score; positive values = high t-score
                             Center.Clinical()
-
+    
+    cat("\nfor clinical scales...\n")
     ## Fit all models first
     model_anxdepr <- lmer(log_rt ~ anxdepr_t + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_clinical, REML = T)
+                    + (1 | SID), data = dat_clinical, REML = T)
 
     model_withdrdepr <- lmer(log_rt ~ withdrdepr_t + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_clinical, REML = T)
+                    + (1 | SID), data = dat_clinical, REML = T)
 
     model_somatic <- lmer(log_rt ~ somatic_t + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_clinical, REML = T)
+                    + (1 | SID), data = dat_clinical, REML = T)
 
     model_thought <- lmer(log_rt ~ thought_t + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_clinical, REML = T)
+                    + (1 | SID), data = dat_clinical, REML = T)
     
     model_attention <- lmer(log_rt ~ attention_t + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_clinical, REML = T)
+                    + (1 | SID), data = dat_clinical, REML = T)
 
     model_aggressive <- lmer(log_rt ~ aggressive_t + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_clinical, REML = T)
+                    + (1 | SID), data = dat_clinical, REML = T)
 
     model_rulebreaking <- lmer(log_rt ~ rulebreaking_t + log_age + sex + ethnicity 
-                    + (1 | SID),
-                    data = dat_clinical, REML = T)
+                    + (1 | SID), data = dat_clinical, REML = T)
     
     ## % change for each model
     res_anxdepr <- Percent.Change.per.SD(model_anxdepr, "anxdepr_t")
@@ -557,22 +540,17 @@ Congruent.RT <- function(EST.data, clinical.data, suicide.data) {
 ## for Accuracy
 Congruent.Accuracy <- function(EST.data, clinical.data, suicide.data) {
 
-    EST <- read_rds(EST.data) |>
-                    ## Keeping only congruent trials
-                    subset(congruence == "congruent") |>
-                        mutate(correct = case_when(
-                            correct == "correct"   ~ 1,
-                            correct == "incorrect" ~ 0
-                        ), .keep = "unused")
-
+    EST <- Prep.EST.Acc(EST.data) |>
+                ## Keeping only congruent trials
+                subset(congruence == "congruent")
     clinical <- read_rds(clinical.data)
-
     suicide <- read_rds(suicide.data)
 
     ## Set contrasts to sum-to-zero coding
     ## Age is centered in data prep
     options(contrasts = c("contr.sum", "contr.poly"))
 
+    cat("\n--- Computing Congruence by Face emotion interaction on Accuracy... ---\n")
     ## ----- Suicide analysis -----
     ## don't bind all 3 (EST, clinical, suicide) together bc would loose a lot of suicide data
     ## EST + clinical: n = 699
@@ -583,9 +561,9 @@ Congruent.Accuracy <- function(EST.data, clinical.data, suicide.data) {
                         ## The intercept will now refer to an average-aged participant
                         Center.Age()
     
+    cat("\nfor suicide...\n")
     model_suicide <- glmer(correct ~ cssrs_attempt_lt + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_suicide, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_suicide, family = binomial(link = "logit"))
     
     ## OR for each outcome
     res_sui_base <- Suicide.OR(model_suicide, "revpairwise", "cssrs_attempt_lt")
@@ -598,34 +576,28 @@ Congruent.Accuracy <- function(EST.data, clinical.data, suicide.data) {
                             ## Centering clinical scales for easier interpretation based on the sample mean
                             ## Negative values = low t-score; positive values = high t-score
                             Center.Clinical()
-
+    
+    cat("\nfor clinical scales...\n")
     model_anxdepr <- glmer(correct ~ anxdepr_t + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_clinical, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_clinical, family = binomial(link = "logit"))
 
     model_withdrdepr <- glmer(correct ~ withdrdepr_t + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_clinical, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_clinical, family = binomial(link = "logit"))
 
     model_somatic <- glmer(correct ~ somatic_t + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_clinical, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_clinical, family = binomial(link = "logit"))
 
     model_thought <- glmer(correct ~ thought_t + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_clinical, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_clinical, family = binomial(link = "logit"))
 
     model_attention <- glmer(correct ~ attention_t + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_clinical, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_clinical, family = binomial(link = "logit"))
 
     model_aggressive <- glmer(correct ~ aggressive_t + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_clinical, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_clinical, family = binomial(link = "logit"))
     
     model_rulebreaking <- glmer(correct ~ rulebreaking_t + log_age + sex + ethnicity
-                    + (1 | SID),
-                    data = dat_clinical, family = binomial(link = "logit"))
+                    + (1 | SID), data = dat_clinical, family = binomial(link = "logit"))
 
     ## OR for each model
     res_anxdep <- Clinical.OR(model_anxdepr, "anxdepr_t", baseline = TRUE)
@@ -635,7 +607,6 @@ Congruent.Accuracy <- function(EST.data, clinical.data, suicide.data) {
     res_att <- Clinical.OR(model_attention, "attention_t", baseline = TRUE)
     res_agg <- Clinical.OR(model_aggressive, "aggressive_t", baseline = TRUE)
     res_ruleb <- Clinical.OR(model_rulebreaking, "rulebreaking_t", baseline = TRUE)
-
 
     all_models <- list(
                     suicide = model_suicide,
@@ -666,7 +637,6 @@ Plot.Accuracy.by.Scale <- function(model, scale, scale_label = scale) {
     ## participant-level SD and observed range of the centered scale
     mf   <- model.frame(model)
     pt   <- mf[!duplicated(mf$SID), ]
-    sd_s <- sd(pt[[scale]])
     at_list <- setNames(list(seq(min(pt[[scale]]), max(pt[[scale]]), length.out = 60)), scale)
 
     ## model-based probabilities (response scale) with 95% CI
@@ -690,10 +660,11 @@ Plot.Accuracy.by.Scale <- function(model, scale, scale_label = scale) {
                 y = "Predicted accuracy (%)") +
             theme_classic() +
             theme(legend.position = "bottom",
-                    axis.text = element_text(size = 12),
-                    axis.title = element_text(size = 14, face = "bold"),
-                    strip.text.x = element_text(size = 12),
-                    legend.text = element_text(size = 12),
+                    axis.text = element_text(size = 18),
+                    axis.title = element_text(size = 20, face = "bold"),
+                    strip.text.x = element_text(size = 18),
+                    legend.text = element_text(size = 18),
+                    legend.title = element_text(size = 20, face = "bold"),
                     panel.grid.minor = element_blank(),
                     strip.background = element_rect(fill = "grey95"))
 }
