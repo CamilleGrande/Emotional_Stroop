@@ -3,6 +3,9 @@
 ## Description:
 ##      This script preps the data for the emotional stroop task analysis
 
+## Wipe and recreate the Outputs folder so old files don't interfere with this run
+    unlink("./0-Data_Prep/Outputs", recursive = TRUE)
+    dir.create("./0-Data_Prep/Outputs", recursive = TRUE)
 
 ## Libraries needed to run the script
     library(tidyverse)
